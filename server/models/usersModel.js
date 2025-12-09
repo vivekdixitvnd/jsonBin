@@ -1,13 +1,12 @@
-// server/models/usersModel.js
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-    // apna custom numeric ID (1,2,3...) - optional but useful for UI
     id: {
       type: Number,
       unique: true,
-      index: true
+      index: true,
+      sparse: true
     },
     name: {
       type: String,
@@ -25,28 +24,11 @@ const userSchema = new mongoose.Schema(
       required: true
     }
   },
-  { timestamps: true }
+  { timestamps: true,
+    strict: false
+   }
 );
 
-// Auto-increment numeric id when document is new
-userSchema.pre("save", async function (next) {
-  if (!this.isNew || this.id != null) {
-    return next();
-  }
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
-  try {
-    const lastUser = await mongoose
-      .model("User")
-      .findOne({})
-      .sort({ id: -1 })
-      .select("id");
-
-    this.id = lastUser && lastUser.id != null ? lastUser.id + 1 : 1;
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
-const User = mongoose.model("User", userSchema);
 export default User;

@@ -1,102 +1,98 @@
 import { useEffect, useState } from "react";
 import EntityTable from "../components/EntityTable.jsx";
+import EntityForm from "../components/EntityForm.jsx";
+import {loadEntityConfig} from "./config.js";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState([]);
+  const [items, setItems] = useState([]);
   const [status, setStatus] = useState("Loading...");
   const [mode, setMode] = useState("create");
-  const [currentOrderId, setCurrentOrderId] = useState(null);
-  const [formValues, setFormValues] = useState({
-    userId: "",
-    productIds: "",
-    orderDate: "",
-    status: "pending",
-  });
+  const [currentId, setCurrentId] = useState(null);
 
-  async function loadOrders() {
+  const [config, setConfig] = useState(null);
+  const [formValues, setFormValues] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { config: cfg, initialForm } = await loadEntityConfig(
+          "orders",
+          setStatus
+        );
+        setConfig(cfg);
+        setFormValues(initialForm);
+      } catch {}
+    })();
+  }, []);
+
+  async function loadItems() {
+    if (!config) return;
     try {
       setStatus("Loading orders...");
-      const res = await fetch(`${API_BASE}/orders`);
+      const endpoint = `${API_BASE}${config.apiPath || "/orders"}`;
+      const res = await fetch(endpoint);
       const data = await res.json();
-      setOrders(data);
+      if (!res.ok) throw new Error(data.message || "Failed to load orders");
+      setItems(data);
       setStatus("Orders loaded");
     } catch (err) {
       console.error(err);
-      setStatus("Failed to load orders");
+      setStatus("Failed to load orders: " + err.message);
     }
   }
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    if (config) loadItems();
+  }, [config]);
 
   function handleChange(field, value) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   }
 
   function resetForm() {
-    setFormValues({
-      userId: "",
-      productIds: "",
-      orderDate: "",
-      status: "pending",
-    });
+    if (!config) return;
+    const reset = {};
+    (config.fields || []).forEach((f) => (reset[f.name] = ""));
+    setFormValues(reset);
     setMode("create");
-    setCurrentOrderId(null);
-  }
-
-  function parseProductIds(str) {
-    return str
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((n) => Number(n));
+    setCurrentId(null);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!config) return;
+    const endpoint = `${API_BASE}${config.apiPath || "/orders"}`;
+
     try {
-      const payload = {
-        userId: Number(formValues.userId),
-        productIds: parseProductIds(formValues.productIds),
-        orderDate: formValues.orderDate || undefined,
-        status: formValues.status,
-      };
-
-      if (!payload.userId) {
-        throw new Error("userId is required");
-      }
-
       if (mode === "create") {
         setStatus("Creating order...");
-        const res = await fetch(`${API_BASE}/orders`, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(formValues)
         });
         const created = await res.json();
-        if (!res.ok) throw new Error(created.message || "Failed to create");
-        setOrders((prev) => [...prev, created]);
-        setStatus(`Order ${created.orderId} created`);
+        if (!res.ok)
+          throw new Error(created.message || "Failed to create order");
+        setItems((prev) => [...prev, created]);
+        setStatus("Order created");
         resetForm();
-      } else if (mode === "edit" && currentOrderId != null) {
+      } else if (mode === "edit" && currentId) {
         setStatus("Updating order...");
-        const res = await fetch(
-          `${API_BASE}/orders/${encodeURIComponent(currentOrderId)}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
+        const res = await fetch(`${endpoint}/${currentId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formValues)
+        });
         const updated = await res.json();
-        if (!res.ok) throw new Error(updated.message || "Failed to update");
-        setOrders((prev) =>
-          prev.map((o) => (o.orderId === updated.orderId ? updated : o))
+        if (!res.ok)
+          throw new Error(updated.message || "Failed to update order");
+        setItems((prev) =>
+          prev.map((it) => (it._id === updated._id ? updated : it))
         );
-        setStatus(`Order ${updated.orderId} updated`);
+        setStatus("Order updated");
         resetForm();
       }
     } catch (err) {
@@ -105,133 +101,70 @@ export default function OrdersPage() {
     }
   }
 
-  function handleEditClick(order) {
+  function handleEditClick(item) {
+    if (!config) return;
     setMode("edit");
-    setCurrentOrderId(order.orderId);
-    setFormValues({
-      userId: order.userId,
-      productIds: (order.productIds || []).join(", "),
-      orderDate: order.orderDate || "",
-      status: order.status || "pending",
+    setCurrentId(item._id);
+
+    const vals = {};
+    (config.fields || []).forEach((f) => {
+      if (f.name === "productIds" && Array.isArray(item.productIds)) {
+        vals[f.name] = item.productIds.join(", ");
+      } else if (f.name === "orderDate" && item.orderDate) {
+        vals[f.name] = item.orderDate.slice(0, 10);
+      } else {
+        vals[f.name] = item[f.name] ?? "";
+      }
     });
-    setStatus(`Editing order ${order.orderId}`);
+    setFormValues(vals);
+    setStatus("Editing order");
   }
 
-  async function handleDelete(order) {
-    if (
-      !window.confirm(`Are you sure you want to delete order ${order.orderId}?`)
-    ) {
-      return;
-    }
+  async function handleDelete(item) {
+    if (!config) return;
+    const id = item._id;
+    if (!window.confirm("Delete this order?")) return;
+
     try {
       setStatus("Deleting order...");
-      const res = await fetch(
-        `${API_BASE}/orders/${encodeURIComponent(order.orderId)}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const endpoint = `${API_BASE}${config.apiPath || "/orders"}`;
+      const res = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || "Failed to delete order");
-      await loadOrders(); // Reload orders after deletion
-      setStatus(`Order ${order.orderId} deleted successfully`);
+      if (!res.ok)
+        throw new Error(result.message || "Failed to delete order");
+      await loadItems();
+      setStatus("Order deleted");
     } catch (err) {
       console.error(err);
-      setStatus(`Failed to delete order: ${err.message}`);
+      setStatus("Failed to delete: " + err.message);
     }
   }
 
-  const columns = [
-    { header: "Order ID", accessor: "orderId" },
-    { header: "User ID", accessor: "userId" },
-    {
-      header: "Product IDs",
-      accessor: "productIds",
-    },
-    { header: "Order Date", accessor: "orderDate" },
-    { header: "Status", accessor: "status" },
-  ];
-
-  const dataForTable = orders.map((o) => ({
-    ...o,
-    productIds: (o.productIds || []).join(", "),
-  }));
+  if (!config) {
+    return (
+      <div>
+        <h2>Orders</h2>
+        <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h2>Orders</h2>
-      <p style={{ fontSize: 14, color: "#555" }}>{status}</p>
+      <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
 
-      <form
+      <EntityForm
+        fields={config.fields || []}
+        values={formValues}
+        onChange={handleChange}
         onSubmit={handleSubmit}
-        style={{
-          marginTop: 20,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: 12,
-          maxWidth: 700,
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>User ID</label>
-          <input
-            type="number"
-            value={formValues.userId}
-            onChange={(e) => handleChange("userId", e.target.value)}
-            required
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Product IDs (comma separated)</label>
-          <input
-            value={formValues.productIds}
-            onChange={(e) => handleChange("productIds", e.target.value)}
-            placeholder="101, 102, 103"
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Order Date</label>
-          <input
-            type="date"
-            value={formValues.orderDate}
-            onChange={(e) => handleChange("orderDate", e.target.value)}
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Status</label>
-          <select
-            value={formValues.status}
-            onChange={(e) => handleChange("status", e.target.value)}
-          >
-            <option value="pending">pending</option>
-            <option value="shipped">shipped</option>
-            <option value="delivered">delivered</option>
-            <option value="cancelled">cancelled</option>
-          </select>
-        </div>
-
-        <div>
-          <button type="submit" style={{ marginTop: 20, padding: "6px 12px" }}>
-            {mode === "create" ? "Create Order" : "Update Order"}
-          </button>
-          {mode === "edit" && (
-            <button
-              type="button"
-              onClick={resetForm}
-              style={{ marginLeft: 8, marginTop: 20 }}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
+        mode={mode}
+      />
 
       <EntityTable
-        columns={columns}
-        data={dataForTable}
+        columns={config.columns || []}
+        data={items}
         onEdit={handleEditClick}
         onDelete={handleDelete}
       />

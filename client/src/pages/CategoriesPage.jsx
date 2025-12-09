@@ -1,74 +1,98 @@
 import { useEffect, useState } from "react";
 import EntityTable from "../components/EntityTable.jsx";
 import EntityForm from "../components/EntityForm.jsx";
+import {loadEntityConfig} from "./config.js";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState([]);
+  const [items, setItems] = useState([]);
   const [status, setStatus] = useState("Loading...");
   const [mode, setMode] = useState("create");
   const [currentId, setCurrentId] = useState(null);
-  const [formValues, setFormValues] = useState({
-    name: "",
-    description: ""
-  });
 
-  async function loadCategories() {
+  const [config, setConfig] = useState(null);
+  const [formValues, setFormValues] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { config: cfg, initialForm } = await loadEntityConfig(
+          "categories",
+          setStatus
+        );
+        setConfig(cfg);
+        setFormValues(initialForm);
+      } catch {}
+    })();
+  }, []);
+
+  async function loadItems() {
+    if (!config) return;
     try {
       setStatus("Loading categories...");
-      const res = await fetch(`${API_BASE}/categories`);
+      const endpoint = `${API_BASE}${config.apiPath || "/categories"}`;
+      const res = await fetch(endpoint);
       const data = await res.json();
-      setCategories(data);
+      if (!res.ok) throw new Error(data.message || "Failed to load categories");
+      setItems(data);
       setStatus("Categories loaded");
     } catch (err) {
       console.error(err);
-      setStatus("Failed to load categories");
+      setStatus("Failed to load categories: " + err.message);
     }
   }
 
   useEffect(() => {
-    loadCategories();
-  }, []);
+    if (config) loadItems();
+  }, [config]);
 
   function handleChange(field, value) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   }
 
   function resetForm() {
-    setFormValues({ name: "", description: "" });
+    if (!config) return;
+    const reset = {};
+    (config.fields || []).forEach((f) => (reset[f.name] = ""));
+    setFormValues(reset);
     setMode("create");
     setCurrentId(null);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!config) return;
+    const endpoint = `${API_BASE}${config.apiPath || "/categories"}`;
+
     try {
       if (mode === "create") {
         setStatus("Creating category...");
-        const res = await fetch(`${API_BASE}/categories`, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formValues)
         });
         const created = await res.json();
-        if (!res.ok) throw new Error(created.message || "Failed to create");
-        setCategories((prev) => [...prev, created]);
-        setStatus(`Category #${created.id} created`);
+        if (!res.ok)
+          throw new Error(created.message || "Failed to create category");
+        setItems((prev) => [...prev, created]);
+        setStatus("Category created");
         resetForm();
-      } else if (mode === "edit" && currentId != null) {
+      } else if (mode === "edit" && currentId) {
         setStatus("Updating category...");
-        const res = await fetch(`${API_BASE}/categories/${currentId}`, {
+        const res = await fetch(`${endpoint}/${currentId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formValues)
         });
         const updated = await res.json();
-        if (!res.ok) throw new Error(updated.message || "Failed to update");
-        setCategories((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c))
+        if (!res.ok)
+          throw new Error(updated.message || "Failed to update category");
+        setItems((prev) =>
+          prev.map((it) => (it._id === updated._id ? updated : it))
         );
-        setStatus(`Category #${updated.id} updated`);
+        setStatus("Category updated");
         resetForm();
       }
     } catch (err) {
@@ -77,53 +101,55 @@ export default function CategoriesPage() {
     }
   }
 
-  function handleEditClick(category) {
+  function handleEditClick(item) {
+    if (!config) return;
     setMode("edit");
-    setCurrentId(category.id);
-    setFormValues({
-      name: category.name,
-      description: category.description || ""
+    setCurrentId(item._id);
+
+    const vals = {};
+    (config.fields || []).forEach((f) => {
+      vals[f.name] = item[f.name] ?? "";
     });
-    setStatus(`Editing category #${category.id}`);
+    setFormValues(vals);
+    setStatus("Editing category");
   }
 
-  async function handleDelete(category) {
-    if (!window.confirm(`Are you sure you want to delete category "${category.name}"?`)) {
-      return;
-    }
+  async function handleDelete(item) {
+    if (!config) return;
+    const id = item._id;
+    if (!window.confirm("Delete this category?")) return;
+
     try {
       setStatus("Deleting category...");
-      const res = await fetch(`${API_BASE}/categories/${category.id}`, {
-        method: "DELETE"
-      });
+      const endpoint = `${API_BASE}${config.apiPath || "/categories"}`;
+      const res = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || "Failed to delete category");
-      await loadCategories(); // Reload categories after deletion
-      setStatus(`Category "${category.name}" deleted successfully`);
+      if (!res.ok)
+        throw new Error(result.message || "Failed to delete category");
+      await loadItems();
+      setStatus("Category deleted");
     } catch (err) {
       console.error(err);
-      setStatus(`Failed to delete category: ${err.message}`);
+      setStatus("Failed to delete: " + err.message);
     }
   }
 
-  const fields = [
-    { name: "name", label: "Name", required: true },
-    { name: "description", label: "Description", required: false }
-  ];
-
-  const columns = [
-    { header: "ID", accessor: "id" },
-    { header: "Name", accessor: "name" },
-    { header: "Description", accessor: "description" }
-  ];
+  if (!config) {
+    return (
+      <div>
+        <h2>Categories</h2>
+        <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h2>Categories</h2>
-      <p style={{ fontSize: 14, color: "#555" }}>{status}</p>
+      <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
 
       <EntityForm
-        fields={fields}
+        fields={config.fields || []}
         values={formValues}
         onChange={handleChange}
         onSubmit={handleSubmit}
@@ -131,8 +157,8 @@ export default function CategoriesPage() {
       />
 
       <EntityTable
-        columns={columns}
-        data={categories}
+        columns={config.columns || []}
+        data={items}
         onEdit={handleEditClick}
         onDelete={handleDelete}
       />

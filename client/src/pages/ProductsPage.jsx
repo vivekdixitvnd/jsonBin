@@ -1,98 +1,98 @@
 import { useEffect, useState } from "react";
 import EntityTable from "../components/EntityTable.jsx";
 import EntityForm from "../components/EntityForm.jsx";
+import {loadEntityConfig} from "./config.js";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [items, setItems] = useState([]);
   const [status, setStatus] = useState("Loading...");
   const [mode, setMode] = useState("create");
   const [currentId, setCurrentId] = useState(null);
-  const [formValues, setFormValues] = useState({
-    name: "",
-    categoryId: "",
-    price: "",
-    stock: ""
-  });
 
-  async function loadCategories() {
-    try {
-      const res = await fetch(`${API_BASE}/categories`);
-      const data = await res.json();
-      setCategories(data);
-    } catch (err) {
-      console.error("Failed to load categories:", err);
-    }
-  }
+  const [config, setConfig] = useState(null);
+  const [formValues, setFormValues] = useState({});
 
-  async function loadProducts() {
+  useEffect(() => {
+    (async () => {
+      try {
+        const { config: cfg, initialForm } = await loadEntityConfig(
+          "products",
+          setStatus
+        );
+        setConfig(cfg);
+        setFormValues(initialForm);
+      } catch {}
+    })();
+  }, []);
+
+  async function loadItems() {
+    if (!config) return;
     try {
       setStatus("Loading products...");
-      const res = await fetch(`${API_BASE}/products`);
+      const endpoint = `${API_BASE}${config.apiPath || "/products"}`;
+      const res = await fetch(endpoint);
       const data = await res.json();
-      setProducts(data);
+      if (!res.ok) throw new Error(data.message || "Failed to load products");
+      setItems(data);
       setStatus("Products loaded");
     } catch (err) {
       console.error(err);
-      setStatus("Failed to load products");
+      setStatus("Failed to load products: " + err.message);
     }
   }
 
   useEffect(() => {
-    loadCategories();
-    loadProducts();
-  }, []);
+    if (config) loadItems();
+  }, [config]);
 
   function handleChange(field, value) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   }
 
   function resetForm() {
-    setFormValues({
-      name: "",
-      categoryId: "",
-      price: "",
-      stock: ""
-    });
+    if (!config) return;
+    const reset = {};
+    (config.fields || []).forEach((f) => (reset[f.name] = ""));
+    setFormValues(reset);
     setMode("create");
     setCurrentId(null);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    try {
-      const payload = {
-        name: formValues.name,
-        categoryId: formValues.categoryId ? Number(formValues.categoryId) : null,
-        price: Number(formValues.price || 0),
-        stock: Number(formValues.stock || 0)
-      };
+    if (!config) return;
+    const endpoint = `${API_BASE}${config.apiPath || "/products"}`;
 
+    try {
       if (mode === "create") {
         setStatus("Creating product...");
-        const res = await fetch(`${API_BASE}/products`, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(formValues)
         });
         const created = await res.json();
-        if (!res.ok) throw new Error(created.message || "Failed to create");
-        await loadProducts(); // Reload products to get updated data
-        setStatus(`Product #${created.id} created`);
+        if (!res.ok)
+          throw new Error(created.message || "Failed to create product");
+        setItems((prev) => [...prev, created]);
+        setStatus("Product created");
         resetForm();
-      } else if (mode === "edit" && currentId != null) {
+      } else if (mode === "edit" && currentId) {
         setStatus("Updating product...");
-        const res = await fetch(`${API_BASE}/products/${currentId}`, {
+        const res = await fetch(`${endpoint}/${currentId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(formValues)
         });
         const updated = await res.json();
-        if (!res.ok) throw new Error(updated.message || "Failed to update");
-        await loadProducts(); // Reload products to get updated data
-        setStatus(`Product #${updated.id} updated`);
+        if (!res.ok)
+          throw new Error(updated.message || "Failed to update product");
+        setItems((prev) =>
+          prev.map((it) => (it._id === updated._id ? updated : it))
+        );
+        setStatus("Product updated");
         resetForm();
       }
     } catch (err) {
@@ -101,71 +101,55 @@ export default function ProductsPage() {
     }
   }
 
-  function handleEditClick(product) {
+  function handleEditClick(item) {
+    if (!config) return;
     setMode("edit");
-    setCurrentId(product.id);
-    setFormValues({
-      name: product.name,
-      categoryId: product.categoryId ?? "",
-      price: product.price,
-      stock: product.stock
+    setCurrentId(item._id);
+
+    const vals = {};
+    (config.fields || []).forEach((f) => {
+      vals[f.name] = item[f.name] ?? "";
     });
-    setStatus(`Editing product #${product.id}`);
+    setFormValues(vals);
+    setStatus("Editing product");
   }
 
-  async function handleDelete(product) {
-    if (!window.confirm(`Are you sure you want to delete product "${product.name}"?`)) {
-      return;
-    }
+  async function handleDelete(item) {
+    if (!config) return;
+    const id = item._id;
+    if (!window.confirm("Delete this product?")) return;
+
     try {
       setStatus("Deleting product...");
-      const res = await fetch(`${API_BASE}/products/${product.id}`, {
-        method: "DELETE"
-      });
+      const endpoint = `${API_BASE}${config.apiPath || "/products"}`;
+      const res = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || "Failed to delete product");
-      await loadProducts(); // Reload products after deletion
-      setStatus(`Product "${product.name}" deleted successfully`);
+      if (!res.ok)
+        throw new Error(result.message || "Failed to delete product");
+      await loadItems();
+      setStatus("Product deleted");
     } catch (err) {
       console.error(err);
-      setStatus(`Failed to delete product: ${err.message}`);
+      setStatus("Failed to delete: " + err.message);
     }
   }
 
-  // Create a map of categoryId to category name
-  const categoryMap = {};
-  categories.forEach((cat) => {
-    categoryMap[cat.id] = cat.name;
-  });
-
-  const fields = [
-    { name: "name", label: "Name", required: true },
-    { name: "categoryId", label: "Category", type: "select", required: false, options: categories },
-    { name: "price", label: "Price", type: "number", required: false },
-    { name: "stock", label: "Stock", type: "number", required: false }
-  ];
-
-  // Transform products data to include category name
-  const dataForTable = products.map((product) => ({
-    ...product,
-    categoryName: product.categoryId ? categoryMap[product.categoryId] : "No Category"
-  }));
-
-  const columns = [
-    { header: "ID", accessor: "id" },
-    { header: "Name", accessor: "name" },
-    { header: "Category", accessor: "categoryName" },
-    { header: "Price", accessor: "price" },
-    { header: "Stock", accessor: "stock" }
-  ];
+  if (!config) {
+    return (
+      <div>
+        <h2>Products</h2>
+        <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h2>Products</h2>
-      <p style={{ fontSize: 14, color: "#555" }}>{status}</p>
+      <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
 
       <EntityForm
-        fields={fields}
+        fields={config.fields || []}
         values={formValues}
         onChange={handleChange}
         onSubmit={handleSubmit}
@@ -173,8 +157,8 @@ export default function ProductsPage() {
       />
 
       <EntityTable
-        columns={columns}
-        data={dataForTable}
+        columns={config.columns || []}
+        data={items}
         onEdit={handleEditClick}
         onDelete={handleDelete}
       />

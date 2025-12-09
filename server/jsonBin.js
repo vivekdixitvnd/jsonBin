@@ -16,7 +16,7 @@ export async function getRecord() {
     throw new Error("Failed to fetch record from JSONBin");
   }
   const data = await res.json();
-  return data.record; // yahi tumhara users, products, etc. wala object hai
+  return data.record;
 }
 
 export async function updateRecord(newRecord) {

@@ -1,4 +1,3 @@
-// server/models/productsModel.js
 export function validateProductPayload(payload) {
   const { name, categoryId, price, stock } = payload;
 
@@ -22,3 +21,43 @@ export function getNextProductId(products) {
   if (!products.length) return 1;
   return Math.max(...products.map((p) => p.id)) + 1;
 }
+
+import mongoose, { mongo } from "mongoose";
+
+const productSchema = new mongoose.Schema(
+  {
+    id: {
+      type: Number,
+      unique: true,
+      index: true,
+      sparse: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    categoryId: {
+      type: Number,
+      required: true
+    },
+    price: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    stock: {
+      type: Number,
+      required: true,
+      min: 0
+    }
+  },
+  { timestamps: true,
+    strict: false
+   }
+);
+
+const Product =
+  mongoose.models.Product || mongoose.model("Product", productSchema);
+
+export default Product;

@@ -1,95 +1,97 @@
-// server/routes/categoriesRoutes.js
 import express from "express";
-import { getRecord, updateRecord } from "../jsonBin.js";
-import {
-  validateCategoryPayload,
-  getNextCategoryId
-} from "../models/categoriesModel.js";
+import Category from "../models/categoriesModel.js";
 
 const router = express.Router();
 
-// GET /api/categories
+function buildUserQueryFromParam(idParam) {
+  if (mongoose.isValidObjectId(idParam)) {
+    return { _id: idParam };
+  }
+
+  const num = Number(idParam);
+  if (!Number.isNaN(num)) {
+    return { id: num };
+  }
+
+  return null;
+}
+
 router.get("/", async (req, res) => {
   try {
-    const record = await getRecord();
-    res.json(record.categories || []);
+    const categories = await Category.find().sort({ createdAt: -1 });
+    res.json(categories);
   } catch (err) {
-    console.error(err);
+    console.error("GET /categories error:", err);
     res.status(500).json({ message: "Failed to fetch categories" });
   }
 });
 
-// POST /api/categories
+async function getNextCategoryId() {
+  const lastCategory = await Category.findOne({ id: { $ne: null } })
+    .sort({ id: -1 })
+    .select("id")
+    .lean();
+
+  if (!lastCategory || lastCategory.id == null) {
+    return 1;
+  }
+
+  return lastCategory.id + 1;
+}
+
 router.post("/", async (req, res) => {
   try {
-    const record = await getRecord();
-    if (!record.categories) record.categories = [];
+    const { name, description = "" } = req.body;
 
-    const clean = validateCategoryPayload(req.body);
-    const newCategory = {
-      id: getNextCategoryId(record.categories),
-      ...clean
-    };
+    if (!name) {
+      return res.status(400).json({ message: "name is required" });
+    }
 
-    record.categories.push(newCategory);
-    await updateRecord(record);
-
-    res.status(201).json(newCategory);
+    const nextId = await getNextCategoryId();
+    const category = await Category.create({ id: nextId, name, description });
+    res.status(201).json(category);
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to create category" });
+    console.error("POST /categories error:", err);
+    res.status(500).json({ message: "Failed to create category" });
   }
 });
 
-// PUT /api/categories/:id
 router.put("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const record = await getRecord();
-    if (!record.categories) record.categories = [];
+    const query = buildUserQueryFromParam(req.params.id);
+    if (!query) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+    const { id, _id, ...updateData } = req.body;
+    const updated = await Category.findOneAndUpdate(query, updateData, {
+      new: true,
+      runValidators: true
+    });
 
-    const index = record.categories.findIndex((c) => c.id === id);
-    if (index === -1) {
+    if (!updated) {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    const existing = record.categories[index];
-
-    const clean = validateCategoryPayload({
-      name: req.body.name ?? existing.name,
-      description: req.body.description ?? existing.description
-    });
-
-    const updatedCategory = { ...existing, ...clean };
-    record.categories[index] = updatedCategory;
-
-    await updateRecord(record);
-    res.json(updatedCategory);
+    res.json(updated);
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to update category" });
+    console.error("PUT /categories/:id error:", err);
+    res.status(500).json({ message: "Failed to update category" });
   }
 });
 
-// DELETE /api/categories/:id
 router.delete("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const record = await getRecord();
-    if (!record.categories) record.categories = [];
+    const { id } = req.params;
 
-    const index = record.categories.findIndex((c) => c.id === id);
-    if (index === -1) {
+    const removed = await Category.findByIdAndDelete(id);
+    if (!removed) {
       return res.status(404).json({ message: "Category not found" });
     }
-
-    const removed = record.categories.splice(index, 1)[0];
-    await updateRecord(record);
 
     res.json({ message: "Category deleted", removed });
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to delete category" });
+    console.error("DELETE /categories/:id error:", err);
+    res.status(500).json({ message: "Failed to delete category" });
   }
 });
 

@@ -1,106 +1,98 @@
-// server/routes/couponsRoutes.js
 import express from "express";
-import { getRecord, updateRecord } from "../jsonBin.js";
-import {
-  validateCouponPayload,
-  getNextCouponId
-} from "../models/couponModel.js";
+import Coupon from "../models/couponModel.js";
 
 const router = express.Router();
 
-// GET /api/coupons
+async function getNextCouponId() {
+  const last = await Coupon.findOne({ id: { $exists: true } })
+    .sort({ createdAt: -1 })
+    .select("id")
+    .lean();
+
+  let nextNum = 1;
+  if (last && last.id) {
+    const match = String(last.id).match(/C(\d+)/);
+    if (match) nextNum = Number(match[1]) + 1;
+  }
+  return `C${nextNum}`;
+}
+
 router.get("/", async (req, res) => {
   try {
-    const record = await getRecord();
-    res.json(record.coupons || []);
+    const coupons = await Coupon.find().sort({ createdAt: -1 });
+    res.json(coupons);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to fetch coupons" });
   }
 });
 
-// POST /api/coupons
 router.post("/", async (req, res) => {
   try {
-    const record = await getRecord();
-    if (!record.coupons) record.coupons = [];
+    const { code, discount, isActive = true, validTill } = req.body;
 
-    const clean = validateCouponPayload(req.body);
-    const newCoupon = {
-      id: getNextCouponId(record.coupons),
-      ...clean
-    };
+    if (!code || discount == null) {
+      return res.status(400).json({ message: "code & discount required" });
+    }
 
-    record.coupons.push(newCoupon);
-    await updateRecord(record);
+    const newId = await getNextCouponId();
 
-    res.status(201).json(newCoupon);
+    const coupon = await Coupon.create({
+      id: newId,
+      code,
+      discount: Number(discount),
+      isActive,
+      validTill: validTill ? new Date(validTill) : null
+    });
+
+    res.status(201).json(coupon);
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to create coupon" });
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "Coupon code or ID already exists" });
+    }
+    res.status(500).json({ message: "Failed to create coupon" });
   }
 });
 
-// PUT /api/coupons/:id
 router.put("/:id", async (req, res) => {
   try {
-    const id = req.params.id;
-    const record = await getRecord();
-    if (!record.coupons) record.coupons = [];
+    const { id } = req.params;
+    const updateData = { ...req.body };
 
-    const index = record.coupons.findIndex((c) => c.id === id);
-    if (index === -1) {
+    if (updateData.id) delete updateData.id;
+
+    if (updateData.discount != null) {
+      updateData.discount = Number(updateData.discount);
+    }
+    if (updateData.validTill) {
+      updateData.validTill = new Date(updateData.validTill);
+    }
+
+    const updated = await Coupon.findOneAndUpdate({ id }, updateData, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!updated) {
       return res.status(404).json({ message: "Coupon not found" });
     }
 
-    const existing = record.coupons[index];
-
-    const clean = validateCouponPayload(
-      {
-        code: req.body.code ?? existing.code,
-        discount:
-          req.body.discount !== undefined
-            ? req.body.discount
-            : existing.discount,
-        isActive:
-          req.body.isActive !== undefined
-            ? req.body.isActive
-            : existing.isActive,
-        validTill: req.body.validTill ?? existing.validTill
-      },
-      existing
-    );
-
-    const updatedCoupon = { ...existing, ...clean };
-    record.coupons[index] = updatedCoupon;
-
-    await updateRecord(record);
-    res.json(updatedCoupon);
+    res.json(updated);
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to update coupon" });
+    res.status(500).json({ message: "Failed to update coupon" });
   }
 });
 
-// DELETE /api/coupons/:id
 router.delete("/:id", async (req, res) => {
   try {
-    const id = req.params.id;
-    const record = await getRecord();
-    if (!record.coupons) record.coupons = [];
+    const removed = await Coupon.findOneAndDelete({ id: req.params.id });
 
-    const index = record.coupons.findIndex((c) => c.id === id);
-    if (index === -1) {
+    if (!removed) {
       return res.status(404).json({ message: "Coupon not found" });
     }
-
-    const removed = record.coupons.splice(index, 1)[0];
-    await updateRecord(record);
 
     res.json({ message: "Coupon deleted", removed });
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to delete coupon" });
+    res.status(500).json({ message: "Failed to delete coupon" });
   }
 });
 

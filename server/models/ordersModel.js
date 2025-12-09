@@ -1,40 +1,43 @@
-// server/models/ordersModel.js
-export function validateOrderPayload(payload, existingOrder) {
-  const base = existingOrder || {};
+import mongoose from "mongoose";
 
-  const userId =
-    payload.userId !== undefined ? Number(payload.userId) : base.userId;
-  if (!userId) {
-    throw new Error("userId is required");
-  }
+const orderSchema = new mongoose.Schema(
+  {
+    orderId: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true
+    },
 
-  const productIds =
-    payload.productIds !== undefined
-      ? payload.productIds.map((id) => Number(id))
-      : base.productIds || [];
+    userId: {
+      type: Number,
+      required: true
+    },
 
-  const orderDate = payload.orderDate ?? base.orderDate ?? new Date().toISOString().slice(0, 10);
-  const status = payload.status ?? base.status ?? "pending";
+    productIds: [
+      {
+        type: Number,
+        required: true
+      }
+    ],
 
-  return {
-    userId,
-    productIds,
-    orderDate,
-    status
-  };
-}
+    orderDate: {
+      type: Date,
+      default: Date.now
+    },
 
-// naya orderId generate karne ke liye (ORD111 type)
-export function getNextOrderId(orders) {
-  if (!orders.length) return "ORD101";
+    status: {
+      type: String,
+      required: true,
+      trim: true
+    }
+  },
+  { timestamps: true,
+    strict: false
+   }
+);
 
-  const nums = orders
-    .map((o) => {
-      const m = String(o.orderId || "").match(/ORD(\d+)/);
-      return m ? Number(m[1]) : null;
-    })
-    .filter((n) => n !== null);
+const Order =
+  mongoose.models.Order || mongoose.model("Order", orderSchema);
 
-  const next = nums.length ? Math.max(...nums) + 1 : 101;
-  return `ORD${next}`;
-}
+export default Order;

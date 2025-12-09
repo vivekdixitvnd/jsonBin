@@ -1,100 +1,118 @@
-// server/routes/productsRoutes.js
 import express from "express";
-import { getRecord, updateRecord } from "../jsonBin.js";
-import {
-  validateProductPayload,
-  getNextProductId
-} from "../models/productModel.js";
+import mongoose from "mongoose";
+import Product from "../models/productModel.js";
 
 const router = express.Router();
 
-// GET /api/products
+function buildUserQueryFromParam(idParam) {
+  if (mongoose.isValidObjectId(idParam)) {
+    return { _id: idParam };
+  }
+
+  const num = Number(idParam);
+  if (!Number.isNaN(num)) {
+    return { id: num };
+  }
+
+  return null;
+}
+
+// 👇 id generation ko touch nahi kar rahe
+async function getNextProductId() {
+  const lastProduct = await Product.findOne({ id: { $ne: null } })
+    .sort({ id: -1 })
+    .select("id")
+    .lean();
+
+  if (!lastProduct || lastProduct.id == null) {
+    return 1;
+  }
+
+  return lastProduct.id + 1;
+}
+
 router.get("/", async (req, res) => {
   try {
-    const record = await getRecord();
-    res.json(record.products || []);
+    const products = await Product.find().sort({ id: 1 });
+    res.json(products);
   } catch (err) {
-    console.error(err);
+    console.error("GET /products error:", err);
     res.status(500).json({ message: "Failed to fetch products" });
   }
 });
 
-// POST /api/products
 router.post("/", async (req, res) => {
   try {
-    const record = await getRecord();
-    if (!record.products) record.products = [];
+    let { name, categoryId, price, stock, ...rest } = req.body;
 
-    const clean = validateProductPayload(req.body);
-    const newProduct = {
-      id: getNextProductId(record.products),
-      ...clean
-    };
-
-    record.products.push(newProduct);
-    await updateRecord(record);
-
-    res.status(201).json(newProduct);
-  } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to create product" });
-  }
-});
-
-// PUT /api/products/:id
-router.put("/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const record = await getRecord();
-    if (!record.products) record.products = [];
-
-    const index = record.products.findIndex((p) => p.id === id);
-    if (index === -1) {
-      return res.status(404).json({ message: "Product not found" });
+    if (!name || categoryId == null || price == null || stock == null) {
+      return res.status(400).json({
+        message: "name, categoryId, price, stock are required"
+      });
     }
 
-    const existing = record.products[index];
+    const nextId = await getNextProductId();
 
-    const clean = validateProductPayload({
-      name: req.body.name ?? existing.name,
-      categoryId:
-        req.body.categoryId !== undefined
-          ? req.body.categoryId
-          : existing.categoryId,
-      price: req.body.price ?? existing.price,
-      stock: req.body.stock ?? existing.stock
+    const product = await Product.create({
+      id: nextId,
+      name,
+      categoryId: Number(categoryId),
+      price: Number(price),
+      stock: Number(stock),
+      ...rest
     });
 
-    const updatedProduct = { ...existing, ...clean };
-    record.products[index] = updatedProduct;
-
-    await updateRecord(record);
-    res.json(updatedProduct);
+    res.status(201).json(product);
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to update product" });
+    console.error("POST /products error:", err);
+    res.status(500).json({ message: "Failed to create product" });
   }
 });
 
-// DELETE /api/products/:id
-router.delete("/:id", async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const record = await getRecord();
-    if (!record.products) record.products = [];
+    const { id } = req.params;
+    const updateData = { ...req.body };
 
-    const index = record.products.findIndex((p) => p.id === id);
-    if (index === -1) {
+    if (updateData.categoryId != null) {
+      updateData.categoryId = Number(updateData.categoryId);
+    }
+    if (updateData.price != null) {
+      updateData.price = Number(updateData.price);
+    }
+    if (updateData.stock != null) {
+      updateData.stock = Number(updateData.stock);
+    }
+
+    const updated = await Product.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!updated) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    const removed = record.products.splice(index, 1)[0];
-    await updateRecord(record);
+    res.json(updated);
+  } catch (err) {
+    console.error("PUT /products/:id error:", err);
+    res.status(500).json({ message: "Failed to update product" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const removed = await Product.findByIdAndDelete(id);
+    if (!removed) {
+      return res.status(404).json({ message: "Product not found" });
+    }
 
     res.json({ message: "Product deleted", removed });
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: err.message || "Failed to delete product" });
+    console.error("DELETE /products/:id error:", err);
+    res.status(500).json({ message: "Failed to delete product" });
   }
 });
 

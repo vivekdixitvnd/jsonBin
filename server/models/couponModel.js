@@ -1,42 +1,38 @@
-// server/models/couponsModel.js
-export function validateCouponPayload(payload, existingCoupon) {
-  const base = existingCoupon || {};
+import mongoose from "mongoose";
 
-  const code = payload.code ?? base.code;
-  if (!code) {
-    throw new Error("Coupon code is required");
+const couponSchema = new mongoose.Schema(
+  {
+    id: {
+      type: String,
+      unique: true,
+      trim: true
+    },
+    code: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true
+    },
+    discount: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    validTill: {
+      type: Date
+    }
+  },
+  { timestamps: true,
+    strict: false 
   }
+);
 
-  const discount =
-    payload.discount !== undefined
-      ? Number(payload.discount)
-      : base.discount ?? 0;
+const Coupon =
+  mongoose.models.Coupon || mongoose.model("Coupon", couponSchema);
 
-  const isActive =
-    payload.isActive !== undefined
-      ? Boolean(payload.isActive)
-      : base.isActive ?? true;
-
-  const validTill = payload.validTill ?? base.validTill ?? null;
-
-  return {
-    code,
-    discount,
-    isActive,
-    validTill
-  };
-}
-
-export function getNextCouponId(coupons) {
-  if (!coupons.length) return "C1";
-
-  const nums = coupons
-    .map((c) => {
-      const m = String(c.id || "").match(/C(\d+)/);
-      return m ? Number(m[1]) : null;
-    })
-    .filter((n) => n !== null);
-
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return `C${next}`;
-}
+export default Coupon;

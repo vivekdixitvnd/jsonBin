@@ -1,33 +1,35 @@
-// server/routes/usersRoutes.js
 import express from "express";
 import mongoose from "mongoose";
 import User from "../models/usersModel.js";
 
 const router = express.Router();
 
-/**
- * Helper: build a Mongo query from URL param
- * Supports:
- *  - /api/users/<_id>  (Mongo ObjectId)
- *  - /api/users/<id>   (numeric id, like 1, 2, 3)
- */
 function buildUserQueryFromParam(idParam) {
-  // Case 1: valid ObjectId => treat as _id
   if (mongoose.isValidObjectId(idParam)) {
     return { _id: idParam };
   }
 
-  // Case 2: numeric id => treat as our custom id
   const num = Number(idParam);
   if (!Number.isNaN(num)) {
     return { id: num };
   }
 
-  // Invalid id
   return null;
 }
 
-// GET /api/users - list all users
+async function getNextUserId() {
+  const lastUser = await User.findOne({ id: { $ne: null } })
+    .sort({ id: -1 })
+    .select("id")
+    .lean();
+
+  if (!lastUser || lastUser.id == null) {
+    return 1;
+  }
+
+  return lastUser.id + 1;
+}
+
 router.get("/", async (req, res) => {
   try {
     const users = await User.find().sort({ createdAt: -1 });
@@ -38,51 +40,36 @@ router.get("/", async (req, res) => {
   }
 });
 
-// OPTIONAL: GET /api/users/:id - fetch single user by _id or id
-router.get("/:id", async (req, res) => {
-  try {
-    const query = buildUserQueryFromParam(req.params.id);
-    if (!query) {
-      return res.status(400).json({ message: "Invalid user id" });
-    }
-
-    const user = await User.findOne(query);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json(user);
-  } catch (err) {
-    console.error("GET /users/:id error:", err);
-    res.status(500).json({ message: "Failed to fetch user" });
-  }
-});
-
-// POST /api/users - create user
-// POST /api/users
 router.post("/", async (req, res) => {
   try {
     const { name, email, phone, ...rest } = req.body;
 
     if (!name || !email || !phone) {
-      return res.status(400).json({ message: "name, email and phone are required" });
+      return res
+        .status(400)
+        .json({ message: "name, email and phone are required" });
     }
 
-    const user = new User({ name, email, phone, ...rest });
-    await user.save(); // <-- IMPORTANT! middleware triggers here
+    const nextId = await getNextUserId();
+
+    const user = await User.create({
+      id: nextId,
+      name,
+      email,
+      phone,
+      ...rest
+    });
 
     res.status(201).json(user);
   } catch (err) {
     console.error("POST /users error:", err);
     if (err.code === 11000) {
-      return res.status(400).json({ message: "Email already exists" });
+      return res.status(400).json({ message: "Email already exists or id duplicate" });
     }
     res.status(500).json({ message: "Failed to create user" });
   }
 });
 
-
-// PUT /api/users/:id - update by _id or numeric id
 router.put("/:id", async (req, res) => {
   try {
     const query = buildUserQueryFromParam(req.params.id);
@@ -90,7 +77,9 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid user id" });
     }
 
-    const updated = await User.findOneAndUpdate(query, req.body, {
+    const { id, _id, ...updateData } = req.body;
+
+    const updated = await User.findOneAndUpdate(query, updateData, {
       new: true,
       runValidators: true
     });
@@ -106,7 +95,6 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id - delete by _id or numeric id
 router.delete("/:id", async (req, res) => {
   try {
     const query = buildUserQueryFromParam(req.params.id);

@@ -1,91 +1,102 @@
 import { useEffect, useState } from "react";
 import EntityTable from "../components/EntityTable.jsx";
+import EntityForm from "../components/EntityForm.jsx";
+import {loadEntityConfig} from "./config.js";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function CouponsPage() {
-  const [coupons, setCoupons] = useState([]);
+  const [items, setItems] = useState([]);
   const [status, setStatus] = useState("Loading...");
   const [mode, setMode] = useState("create");
   const [currentId, setCurrentId] = useState(null);
-  const [formValues, setFormValues] = useState({
-    code: "",
-    discount: "",
-    isActive: true,
-    validTill: ""
-  });
 
-  async function loadCoupons() {
+  const [config, setConfig] = useState(null);
+  const [formValues, setFormValues] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { config: cfg, initialForm } = await loadEntityConfig(
+          "coupons",
+          setStatus
+        );
+        setConfig(cfg);
+        setFormValues(initialForm);
+      } catch {}
+    })();
+  }, []);
+
+  async function loadItems() {
+    if (!config) return;
     try {
       setStatus("Loading coupons...");
-      const res = await fetch(`${API_BASE}/coupons`);
+      const endpoint = `${API_BASE}${config.apiPath || "/coupons"}`;
+      const res = await fetch(endpoint);
       const data = await res.json();
-      setCoupons(data);
+      if (!res.ok) throw new Error(data.message || "Failed to load coupons");
+      setItems(data);
       setStatus("Coupons loaded");
     } catch (err) {
       console.error(err);
-      setStatus("Failed to load coupons");
+      setStatus("Failed to load coupons: " + err.message);
     }
   }
 
   useEffect(() => {
-    loadCoupons();
-  }, []);
+    if (config) loadItems();
+  }, [config]);
 
   function handleChange(field, value) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   }
 
   function resetForm() {
-    setFormValues({
-      code: "",
-      discount: "",
-      isActive: true,
-      validTill: ""
+    if (!config) return;
+    const reset = {};
+    (config.fields || []).forEach((f) => {
+      if (f.type === "checkbox") reset[f.name] = false;
+      else reset[f.name] = "";
     });
+    setFormValues(reset);
     setMode("create");
     setCurrentId(null);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!config) return;
+
+    const endpoint = `${API_BASE}${config.apiPath || "/coupons"}`;
+
     try {
-      const payload = {
-        code: formValues.code,
-        discount: Number(formValues.discount || 0),
-        isActive: Boolean(formValues.isActive),
-        validTill: formValues.validTill || null
-      };
-
-      if (!payload.code) {
-        throw new Error("code is required");
-      }
-
       if (mode === "create") {
         setStatus("Creating coupon...");
-        const res = await fetch(`${API_BASE}/coupons`, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(formValues)
         });
         const created = await res.json();
-        if (!res.ok) throw new Error(created.message || "Failed to create");
-        setCoupons((prev) => [...prev, created]);
-        setStatus(`Coupon ${created.id} created`);
+        if (!res.ok)
+          throw new Error(created.message || "Failed to create coupon");
+        setItems((prev) => [...prev, created]);
+        setStatus("Coupon created");
         resetForm();
-      } else if (mode === "edit" && currentId != null) {
+      } else if (mode === "edit" && currentId) {
         setStatus("Updating coupon...");
-        const res = await fetch(`${API_BASE}/coupons/${currentId}`, {
+        const res = await fetch(`${endpoint}/${currentId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(formValues)
         });
         const updated = await res.json();
-        if (!res.ok) throw new Error(updated.message || "Failed to update");
-        setCoupons((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c))
+        if (!res.ok)
+          throw new Error(updated.message || "Failed to update coupon");
+        setItems((prev) =>
+          prev.map((it) => (it._id === updated._id ? updated : it))
         );
-        setStatus(`Coupon ${updated.id} updated`);
+        setStatus("Coupon updated");
         resetForm();
       }
     } catch (err) {
@@ -94,124 +105,70 @@ export default function CouponsPage() {
     }
   }
 
-  function handleEditClick(coupon) {
+  function handleEditClick(item) {
+    if (!config) return;
     setMode("edit");
-    setCurrentId(coupon.id);
-    setFormValues({
-      code: coupon.code,
-      discount: coupon.discount,
-      isActive: coupon.isActive,
-      validTill: coupon.validTill || ""
+    setCurrentId(item._id);
+
+    const vals = {};
+    (config.fields || []).forEach((f) => {
+      if (f.type === "checkbox") {
+        vals[f.name] = Boolean(item[f.name]);
+      } else if (f.type === "date" && item[f.name]) {
+        vals[f.name] = item[f.name].slice(0, 10);
+      } else {
+        vals[f.name] = item[f.name] ?? "";
+      }
     });
-    setStatus(`Editing coupon ${coupon.id}`);
+    setFormValues(vals);
+    setStatus("Editing coupon");
   }
 
-  async function handleDelete(coupon) {
-    if (!window.confirm(`Are you sure you want to delete coupon "${coupon.code}"?`)) {
-      return;
-    }
+  async function handleDelete(item) {
+    if (!config) return;
+    const id = item._id;
+    if (!window.confirm("Delete this coupon?")) return;
+
     try {
       setStatus("Deleting coupon...");
-      const res = await fetch(`${API_BASE}/coupons/${coupon.id}`, {
-        method: "DELETE"
-      });
+      const endpoint = `${API_BASE}${config.apiPath || "/coupons"}`;
+      const res = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || "Failed to delete coupon");
-      await loadCoupons(); // Reload coupons after deletion
-      setStatus(`Coupon "${coupon.code}" deleted successfully`);
+      if (!res.ok)
+        throw new Error(result.message || "Failed to delete coupon");
+      await loadItems();
+      setStatus("Coupon deleted");
     } catch (err) {
       console.error(err);
-      setStatus(`Failed to delete coupon: ${err.message}`);
+      setStatus("Failed to delete: " + err.message);
     }
   }
 
-  const columns = [
-    { header: "ID", accessor: "id" },
-    { header: "Code", accessor: "code" },
-    { header: "Discount", accessor: "discount" },
-    { header: "Active", accessor: "isActive" },
-    { header: "Valid Till", accessor: "validTill" }
-  ];
-
-  const dataForTable = coupons.map((c) => ({
-    ...c,
-    isActive: c.isActive ? "Yes" : "No"
-  }));
+  if (!config) {
+    return (
+      <div>
+        <h2>Coupons</h2>
+        <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h2>Coupons</h2>
-      <p style={{ fontSize: 14, color: "#555" }}>{status}</p>
+      <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
 
-      <form
+      <EntityForm
+        fields={config.fields || []}
+        values={formValues}
+        onChange={handleChange}
         onSubmit={handleSubmit}
-        style={{
-          marginTop: 20,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: 12,
-          maxWidth: 700
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Code</label>
-          <input
-            value={formValues.code}
-            onChange={(e) => handleChange("code", e.target.value)}
-            required
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Discount</label>
-          <input
-            type="number"
-            value={formValues.discount}
-            onChange={(e) => handleChange("discount", e.target.value)}
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Active</label>
-          <select
-            value={formValues.isActive ? "true" : "false"}
-            onChange={(e) =>
-              handleChange("isActive", e.target.value === "true")
-            }
-          >
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Valid Till</label>
-          <input
-            type="date"
-            value={formValues.validTill || ""}
-            onChange={(e) => handleChange("validTill", e.target.value)}
-          />
-        </div>
-
-        <div>
-          <button type="submit" style={{ marginTop: 20, padding: "6px 12px" }}>
-            {mode === "create" ? "Create Coupon" : "Update Coupon"}
-          </button>
-          {mode === "edit" && (
-            <button
-              type="button"
-              onClick={resetForm}
-              style={{ marginLeft: 8, marginTop: 20 }}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
+        mode={mode}
+      />
 
       <EntityTable
-        columns={columns}
-        data={dataForTable}
+        columns={config.columns || []}
+        data={items}
         onEdit={handleEditClick}
         onDelete={handleDelete}
       />

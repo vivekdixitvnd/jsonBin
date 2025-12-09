@@ -1,18 +1,28 @@
-// server/models/categoriesModel.js
-export function validateCategoryPayload(payload) {
-  const { name, description } = payload;
+import mongoose from "mongoose";
 
-  if (!name || typeof name !== "string") {
-    throw new Error("Category name is required");
-  }
+const categorySchema = new mongoose.Schema(
+  {
+    id: {
+      type: Number,
+      unique: true,
+      index: true,
+      sparse: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    description: {
+      type: String,
+      default: ""
+    }
+  },
+  { timestamps: true,
+    strict: false }
+);
 
-  return {
-    name,
-    description: description ?? ""
-  };
-}
+const Category =
+  mongoose.models.Category || mongoose.model("Category", categorySchema);
 
-export function getNextCategoryId(categories) {
-  if (!categories.length) return 1;
-  return Math.max(...categories.map((c) => c.id)) + 1;
-}
+export default Category;
