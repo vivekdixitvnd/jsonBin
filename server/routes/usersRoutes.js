@@ -42,6 +42,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
+    console.log("BODY:", req.body);
     const { name, email, phone, ...rest } = req.body;
 
     if (!name || !email || !phone) {
