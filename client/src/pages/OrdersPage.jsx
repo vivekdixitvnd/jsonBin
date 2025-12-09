@@ -12,7 +12,7 @@ export default function OrdersPage() {
     userId: "",
     productIds: "",
     orderDate: "",
-    status: "pending"
+    status: "pending",
   });
 
   async function loadOrders() {
@@ -41,7 +41,7 @@ export default function OrdersPage() {
       userId: "",
       productIds: "",
       orderDate: "",
-      status: "pending"
+      status: "pending",
     });
     setMode("create");
     setCurrentOrderId(null);
@@ -62,7 +62,7 @@ export default function OrdersPage() {
         userId: Number(formValues.userId),
         productIds: parseProductIds(formValues.productIds),
         orderDate: formValues.orderDate || undefined,
-        status: formValues.status
+        status: formValues.status,
       };
 
       if (!payload.userId) {
@@ -74,7 +74,7 @@ export default function OrdersPage() {
         const res = await fetch(`${API_BASE}/orders`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
         const created = await res.json();
         if (!res.ok) throw new Error(created.message || "Failed to create");
@@ -88,15 +88,13 @@ export default function OrdersPage() {
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
           }
         );
         const updated = await res.json();
         if (!res.ok) throw new Error(updated.message || "Failed to update");
         setOrders((prev) =>
-          prev.map((o) =>
-            o.orderId === updated.orderId ? updated : o
-          )
+          prev.map((o) => (o.orderId === updated.orderId ? updated : o))
         );
         setStatus(`Order ${updated.orderId} updated`);
         resetForm();
@@ -114,20 +112,25 @@ export default function OrdersPage() {
       userId: order.userId,
       productIds: (order.productIds || []).join(", "),
       orderDate: order.orderDate || "",
-      status: order.status || "pending"
+      status: order.status || "pending",
     });
     setStatus(`Editing order ${order.orderId}`);
   }
 
   async function handleDelete(order) {
-    if (!window.confirm(`Are you sure you want to delete order ${order.orderId}?`)) {
+    if (
+      !window.confirm(`Are you sure you want to delete order ${order.orderId}?`)
+    ) {
       return;
     }
     try {
       setStatus("Deleting order...");
-      const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(order.orderId)}`, {
-        method: "DELETE"
-      });
+      const res = await fetch(
+        `${API_BASE}/orders/${encodeURIComponent(order.orderId)}`,
+        {
+          method: "DELETE",
+        }
+      );
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || "Failed to delete order");
       await loadOrders(); // Reload orders after deletion
@@ -143,15 +146,15 @@ export default function OrdersPage() {
     { header: "User ID", accessor: "userId" },
     {
       header: "Product IDs",
-      accessor: "productIds"
+      accessor: "productIds",
     },
     { header: "Order Date", accessor: "orderDate" },
-    { header: "Status", accessor: "status" }
+    { header: "Status", accessor: "status" },
   ];
 
   const dataForTable = orders.map((o) => ({
     ...o,
-    productIds: (o.productIds || []).join(", ")
+    productIds: (o.productIds || []).join(", "),
   }));
 
   return (
@@ -166,7 +169,7 @@ export default function OrdersPage() {
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
           gap: 12,
-          maxWidth: 700
+          maxWidth: 700,
         }}
       >
         <div style={{ display: "flex", flexDirection: "column" }}>

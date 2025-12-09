@@ -1,20 +1,52 @@
-export function validateUserPayload(payload) {
-  const { name, email, phone } = payload;
+// server/models/usersModel.js
+import mongoose from "mongoose";
 
-  if (!name || typeof name !== "string") {
-    throw new Error("name is required");
-  }
-  if (!email || typeof email !== "string") {
-    throw new Error("email is required");
-  }
-  if (!phone || typeof phone !== "string") {
-    throw new Error("phone is required");
+const userSchema = new mongoose.Schema(
+  {
+    // apna custom numeric ID (1,2,3...) - optional but useful for UI
+    id: {
+      type: Number,
+      unique: true,
+      index: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true
+    },
+    phone: {
+      type: String,
+      required: true
+    }
+  },
+  { timestamps: true }
+);
+
+// Auto-increment numeric id when document is new
+userSchema.pre("save", async function (next) {
+  if (!this.isNew || this.id != null) {
+    return next();
   }
 
-  return { name, email, phone };
-}
+  try {
+    const lastUser = await mongoose
+      .model("User")
+      .findOne({})
+      .sort({ id: -1 })
+      .select("id");
 
-export function getNextUserId(users) {
-  if (!users.length) return 1;
-  return Math.max(...users.map((u) => u.id)) + 1;
-}
+    this.id = lastUser && lastUser.id != null ? lastUser.id + 1 : 1;
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+const User = mongoose.model("User", userSchema);
+export default User;
