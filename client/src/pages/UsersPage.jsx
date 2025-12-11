@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import EntityTable from "../components/EntityTable.jsx";
 import EntityForm from "../components/EntityForm.jsx";
 import { loadEntityConfig } from "./config.js";
+import { setByPath } from "../utils/objPath.js";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -99,7 +100,11 @@ export default function UsersPage() {
   }, [config]);
 
   function handleChange(field, value) {
-    setFormValues((prev) => ({ ...prev, [field]: value }));
+    setFormValues((prev) => {
+      const copy = JSON.parse(JSON.stringify(prev || {}));
+      setByPath(copy, field, value);
+      return copy;
+    });
   }
 
   function resetForm() {
@@ -119,13 +124,25 @@ export default function UsersPage() {
 
     const endpoint = `${API_BASE}${config.apiPath || "/users"}`;
 
+    // Clean form values: remove empty strings, keep empty arrays as [] (not null)
+    const cleanedValues = {};
+    Object.keys(formValues).forEach((key) => {
+      const val = formValues[key];
+      // Keep arrays (even empty ones) and other non-empty values
+      if (Array.isArray(val)) {
+        cleanedValues[key] = val;
+      } else if (val !== "" && val != null) {
+        cleanedValues[key] = val;
+      }
+    });
+
     try {
       if (mode === "create") {
         setStatus("Creating user...");
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formValues),
+          body: JSON.stringify(cleanedValues),
         });
         const created = await res.json();
         if (!res.ok) throw new Error(created.message || "Failed to create");
@@ -143,7 +160,7 @@ export default function UsersPage() {
         const res = await fetch(`${endpoint}/${currentId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formValues),
+          body: JSON.stringify(cleanedValues),
         });
         const updated = await res.json();
         if (!res.ok) throw new Error(updated.message || "Failed to update");
@@ -166,7 +183,16 @@ export default function UsersPage() {
 
     const vals = {};
     (config.fields || []).forEach((f) => {
-      vals[f.name] = user[f.name] ?? "";
+      const userValue = user[f.name];
+      if (f.type === "checkbox" && (f.array || f.array === "true")) {
+        vals[f.name] = Array.isArray(userValue) ? userValue : [];
+      } else if (f.type === "subString" || f.type === "safetychecks" || f.type === "permitchecklists") {
+        vals[f.name] = Array.isArray(userValue) ? userValue : [];
+      } else if (f.type === "checkbox") {
+        vals[f.name] = userValue ?? false;
+      } else {
+        vals[f.name] = userValue ?? "";
+      }
     });
     setFormValues(vals);
     setStatus(`Editing user`);
@@ -194,17 +220,32 @@ export default function UsersPage() {
 
   if (!config) {
     return (
-      <div>
-        <h2>Users</h2>
+      <div style={{ padding: "24px" }}>
+        <h2 style={{ marginBottom: "16px", color: "#333" }}>Users</h2>
         <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <h2>Users</h2>
-      <p style={{ fontSize: "14px", color: "#555" }}>{status}</p>
+    <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
+      <div style={{ marginBottom: "24px" }}>
+        <h2 style={{ 
+          marginBottom: "8px", 
+          color: "#333",
+          fontSize: "28px",
+          fontWeight: "600"
+        }}>
+          Users Management
+        </h2>
+        <p style={{ 
+          fontSize: "14px", 
+          color: status.includes("Failed") ? "#dc3545" : status.includes("Loading") ? "#007bff" : "#28a745",
+          fontWeight: status.includes("Failed") || status.includes("Loading") ? "500" : "400"
+        }}>
+          {status}
+        </p>
+      </div>
 
       <EntityForm
         fields={config.fields || []}

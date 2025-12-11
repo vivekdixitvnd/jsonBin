@@ -160,15 +160,34 @@ export default function EntityForm({
       onSubmit={handleSubmit}
       style={{
         marginTop: "20px",
+        padding: "24px",
+        background: "#ffffff",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-        gap: "12px",
-        maxWidth: "600px"
+        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+        gap: "20px",
+        maxWidth: "900px"
       }}
     >
       {(fields || []).map((field) => (
-        <div key={field.name} style={{ display: "flex", flexDirection: "column" }}>
-          <label style={{ marginBottom: "4px", fontWeight: "bold" }}>{field.label}</label>
+        <div 
+          key={field.name} 
+          style={{ 
+            display: "flex", 
+            flexDirection: "column",
+            gridColumn: field.type === "textarea" || field.type === "subString" || field.type === "safetychecks" || field.type === "permitchecklists" ? "1 / -1" : "auto"
+          }}
+        >
+          <label style={{ 
+            marginBottom: "8px", 
+            fontWeight: "600",
+            fontSize: "14px",
+            color: "#333"
+          }}>
+            {field.label}
+            {field.required && <span style={{ color: "#dc3545", marginLeft: "4px" }}>*</span>}
+          </label>
 
           {/* Use FieldRenderer so different `type`s from JSON work.
               FieldRenderer expects:
@@ -184,9 +203,24 @@ export default function EntityForm({
         </div>
       ))}
 
-      <div>
-        <button type="submit" style={{ marginTop: "18px", padding: "6px 12px" }}>
-          {mode === "edit" ? "Update" : "Create"}
+      <div style={{ gridColumn: "1 / -1", marginTop: "8px" }}>
+        <button 
+          type="submit" 
+          style={{ 
+            padding: "10px 24px",
+            background: "#007bff",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "16px",
+            fontWeight: "500",
+            cursor: "pointer",
+            transition: "background 0.2s"
+          }}
+          onMouseOver={(e) => e.target.style.background = "#0056b3"}
+          onMouseOut={(e) => e.target.style.background = "#007bff"}
+        >
+          {mode === "edit" ? "Update User" : "Create User"}
         </button>
       </div>
     </form>

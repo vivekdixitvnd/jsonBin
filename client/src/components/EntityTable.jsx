@@ -228,44 +228,112 @@ import TableCellRenderer from "./TableCellRenderer";
  */
 export default function EntityTable({ columns = [], data = [], onEdit, onDelete }) {
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 8 }}>
+    <div style={{ marginTop: 24 }}>
+      <div style={{ 
+        overflowX: "auto", 
+        background: "#ffffff",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+      }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#fafafa" }}>
-            <tr>
+          <thead>
+            <tr style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}>
               {(columns || []).map((col) => (
                 <th
                   key={col.accessor}
-                  style={{ textAlign: "left", padding: "8px 12px", borderBottom: "1px solid #eee" }}
+                  style={{ 
+                    textAlign: "left", 
+                    padding: "14px 16px", 
+                    borderBottom: "2px solid #5a67d8",
+                    color: "white",
+                    fontWeight: "600",
+                    fontSize: "14px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}
                 >
                   {col.header}
                 </th>
               ))}
-              <th style={{ padding: "8px 12px", borderBottom: "1px solid #eee" }}>Actions</th>
+              <th style={{ 
+                padding: "14px 16px", 
+                borderBottom: "2px solid #5a67d8",
+                color: "white",
+                fontWeight: "600",
+                fontSize: "14px",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px"
+              }}>
+                Actions
+              </th>
             </tr>
           </thead>
 
           <tbody>
             {(!data || data.length === 0) && (
               <tr>
-                <td colSpan={(columns || []).length + 1} style={{ padding: 16 }}>
+                <td colSpan={(columns || []).length + 1} style={{ padding: "40px 16px", textAlign: "center", color: "#999" }}>
                   No data available
                 </td>
               </tr>
             )}
 
             {(data || []).map((row, rIndex) => (
-              <tr key={row._id ?? row.id ?? rIndex} style={{ borderTop: "1px solid #f5f5f5" }}>
+              <tr 
+                key={row._id ?? row.id ?? rIndex} 
+                style={{ 
+                  borderTop: "1px solid #f0f0f0",
+                  transition: "background 0.2s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#f8f9ff"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
                 {(columns || []).map((col) => (
-                  <td key={col.accessor} style={{ padding: "8px 12px", verticalAlign: "top" }}>
+                  <td key={col.accessor} style={{ padding: "12px 16px", verticalAlign: "top", fontSize: "14px", color: "#333" }}>
                     <TableCellRenderer row={row} column={col} />
                   </td>
                 ))}
 
-                <td style={{ padding: "8px 12px", verticalAlign: "top" }}>
+                <td style={{ padding: "12px 16px", verticalAlign: "top" }}>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => onEdit && onEdit(row)}>Edit</button>
-                    <button onClick={() => onDelete && onDelete(row)}>Delete</button>
+                    {onEdit && (
+                      <button 
+                        onClick={() => onEdit(row)}
+                        style={{
+                          padding: "6px 12px",
+                          background: "#28a745",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "13px",
+                          cursor: "pointer",
+                          transition: "background 0.2s"
+                        }}
+                        onMouseOver={(e) => e.target.style.background = "#218838"}
+                        onMouseOut={(e) => e.target.style.background = "#28a745"}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button 
+                        onClick={() => onDelete(row)}
+                        style={{
+                          padding: "6px 12px",
+                          background: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "13px",
+                          cursor: "pointer",
+                          transition: "background 0.2s"
+                        }}
+                        onMouseOver={(e) => e.target.style.background = "#c82333"}
+                        onMouseOut={(e) => e.target.style.background = "#dc3545"}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

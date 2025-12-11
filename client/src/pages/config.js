@@ -18,8 +18,12 @@ async function loadEntityConfig(entityKey, setStatus) {
     // form ke liye initial values
     const initialForm = {};
     (cfg.fields || []).forEach((f) => {
-      if (f.type === "checkbox") {
+      if (f.type === "checkbox" && !f.array && f.array !== "true") {
         initialForm[f.name] = false;
+      } else if (f.type === "checkbox" && (f.array || f.array === "true")) {
+        initialForm[f.name] = [];
+      } else if (f.type === "subString" || f.type === "safetychecks" || f.type === "permitchecklists" || (f.array || f.array === "true")) {
+        initialForm[f.name] = [];
       } else {
         initialForm[f.name] = "";
       }

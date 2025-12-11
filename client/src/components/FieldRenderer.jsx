@@ -60,46 +60,84 @@ export default function FieldRenderer({ field, values, onChange }) {
   switch (type) {
     case "textarea":
       return (
-        <label>
-          {label}
-          <textarea value={value} onChange={(e) => change(e.target.value)} />
-        </label>
+        <textarea 
+          value={value} 
+          onChange={(e) => change(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "14px",
+            minHeight: "100px",
+            resize: "vertical",
+            width: "100%",
+            boxSizing: "border-box",
+            fontFamily: "inherit",
+            transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => e.target.style.borderColor = "#007bff"}
+          onBlur={(e) => e.target.style.borderColor = "#ddd"}
+        />
       );
 
     case "number":
       return (
-        <label>
-          {label}
-          <input
-            type="number"
-            value={value ?? ""}
-            onChange={(e) => change(e.target.valueAsNumber)}
-          />
-        </label>
+        <input
+          type="number"
+          value={value ?? ""}
+          onChange={(e) => change(e.target.valueAsNumber)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "14px",
+            width: "100%",
+            boxSizing: "border-box",
+            transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => e.target.style.borderColor = "#007bff"}
+          onBlur={(e) => e.target.style.borderColor = "#ddd"}
+        />
       );
 
     case "email":
       return (
-        <label>
-          {label}
-          <input
-            type="email"
-            value={value ?? ""}
-            onChange={(e) => change(e.target.value)}
-          />
-        </label>
+        <input
+          type="email"
+          value={value ?? ""}
+          onChange={(e) => change(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "14px",
+            width: "100%",
+            boxSizing: "border-box",
+            transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => e.target.style.borderColor = "#007bff"}
+          onBlur={(e) => e.target.style.borderColor = "#ddd"}
+        />
       );
 
     case "phone":
       return (
-        <label>
-          {label}
-          <input
-            type="tel"
-            value={value ?? ""}
-            onChange={(e) => change(e.target.value)}
-          />
-        </label>
+        <input
+          type="tel"
+          value={value ?? ""}
+          onChange={(e) => change(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "14px",
+            width: "100%",
+            boxSizing: "border-box",
+            transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => e.target.style.borderColor = "#007bff"}
+          onBlur={(e) => e.target.style.borderColor = "#ddd"}
+        />
       );
 
     case "password":
@@ -164,23 +202,36 @@ export default function FieldRenderer({ field, values, onChange }) {
 
     case "dropdown": {
       return (
-        <label>
-          {label}
-          <select value={value ?? ""} onChange={(e) => change(e.target.value)}>
-            <option value="">— select —</option>
-            {resolvedOptions.map((opt, i) =>
-              typeof opt === "object" ? (
-                <option key={i} value={opt.value ?? opt.id ?? opt[apiTitle]}>
-                  {opt.label ?? opt[apiTitle] ?? JSON.stringify(opt)}
-                </option>
-              ) : (
-                <option key={i} value={opt}>
-                  {opt}
-                </option>
-              )
-            )}
-          </select>
-        </label>
+        <select 
+          value={value ?? ""} 
+          onChange={(e) => change(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "14px",
+            width: "100%",
+            boxSizing: "border-box",
+            background: "white",
+            cursor: "pointer",
+            transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => e.target.style.borderColor = "#007bff"}
+          onBlur={(e) => e.target.style.borderColor = "#ddd"}
+        >
+          <option value="">— select —</option>
+          {resolvedOptions.map((opt, i) =>
+            typeof opt === "object" ? (
+              <option key={i} value={opt.value ?? opt.id ?? opt[apiTitle]}>
+                {opt.label ?? opt[apiTitle] ?? JSON.stringify(opt)}
+              </option>
+            ) : (
+              <option key={i} value={opt}>
+                {opt}
+              </option>
+            )
+          )}
+        </select>
       );
     }
 
@@ -328,23 +379,79 @@ export default function FieldRenderer({ field, values, onChange }) {
       }
       return (
         <div>
-          <div style={{ fontWeight: "bold" }}>{label}</div>
-          <button onClick={addRow}>Add</button>
+          <button 
+            type="button"
+            onClick={addRow}
+            style={{
+              padding: "8px 16px",
+              background: "#28a745",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              cursor: "pointer",
+              marginBottom: "12px",
+              transition: "background 0.2s"
+            }}
+            onMouseOver={(e) => e.target.style.background = "#218838"}
+            onMouseOut={(e) => e.target.style.background = "#28a745"}
+          >
+            + Add Item
+          </button>
           {arr.map((row, i) => (
             <div
               key={i}
-              style={{ border: "1px solid #eee", padding: 8, margin: 8 }}
+              style={{ 
+                border: "1px solid #e0e0e0", 
+                padding: "16px", 
+                marginBottom: "12px",
+                borderRadius: "6px",
+                background: "#fafafa"
+              }}
             >
               {subFields?.map((sf) => (
-                <div key={sf.field}>
-                  <small>{sf.label}</small>
+                <div key={sf.field} style={{ marginBottom: "12px" }}>
+                  <label style={{ 
+                    display: "block", 
+                    marginBottom: "4px",
+                    fontSize: "13px",
+                    fontWeight: "500",
+                    color: "#555"
+                  }}>
+                    {sf.label}
+                  </label>
                   <input
                     value={row[sf.field] ?? ""}
                     onChange={(e) => updateItem(i, sf.field, e.target.value)}
+                    style={{
+                      padding: "8px 12px",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                      width: "100%",
+                      boxSizing: "border-box"
+                    }}
                   />
                 </div>
               ))}
-              <button onClick={() => removeRow(i)}>Remove</button>
+              <button 
+                type="button"
+                onClick={() => removeRow(i)}
+                style={{
+                  padding: "6px 12px",
+                  background: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={(e) => e.target.style.background = "#c82333"}
+                onMouseOut={(e) => e.target.style.background = "#dc3545"}
+              >
+                Remove
+              </button>
             </div>
           ))}
         </div>
@@ -408,10 +515,21 @@ export default function FieldRenderer({ field, values, onChange }) {
 
     default:
       return (
-        <label>
-          {label}
-          <input value={value ?? ""} onChange={(e) => change(e.target.value)} />
-        </label>
+        <input 
+          value={value ?? ""} 
+          onChange={(e) => change(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "14px",
+            transition: "border-color 0.2s",
+            width: "100%",
+            boxSizing: "border-box"
+          }}
+          onFocus={(e) => e.target.style.borderColor = "#007bff"}
+          onBlur={(e) => e.target.style.borderColor = "#ddd"}
+        />
       );
   }
 }
