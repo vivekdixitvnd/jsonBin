@@ -213,7 +213,7 @@ export default function FieldRenderer({ field, values, onChange }) {
           onBlur={(e) => e.target.style.borderColor = "#ddd"}
         />
       );
-
+// plain password type fo rdecryption in the frontend
     case "number":
       return (
         <input
@@ -359,8 +359,8 @@ export default function FieldRenderer({ field, values, onChange }) {
             <option value="">— select —</option>
             {resolvedOptions.map((opt, i) => {
               if (typeof opt === "object" && opt !== null) {
-                const optValue = opt.value ?? opt.id ?? opt._id ?? opt.userId ?? opt[apiTitle];
-                const optLabel = opt.label ?? opt.name ?? opt[apiTitle] ?? JSON.stringify(opt);
+                // const optValue = opt.value ?? opt.id ?? opt._id ?? opt.userId ?? opt[apiTitle];
+                // const optLabel = opt.label ?? opt.name ?? opt[apiTitle] ?? JSON.stringify(opt);
                 return (
                   <option key={i} value={optValue ?? ""}>
                     {optLabel}
@@ -515,8 +515,8 @@ export default function FieldRenderer({ field, values, onChange }) {
     }
 
     case "subString":
-    case "safetychecks":
-    case "permitchecklists": {
+    case "safetychecks": //pointer like yes noyes n o for safety checks
+    case "permitchecklists":{ // pointer like yes noyes no for permit checklists 
       const arr = Array.isArray(value) ? value : [];
       function updateItem(idx, key, v) {
         const copy = arr.slice();
@@ -688,3 +688,5 @@ export default function FieldRenderer({ field, values, onChange }) {
       );
   }
 }
+
+

@@ -5,12 +5,17 @@ dotenv.config();
 
 import { connectDB } from "./db.js";
 
-import usersRoutes from "./routes/usersRoutes.js";
-import categoriesRoutes from "./routes/categoriesRoutes.js";
-import productsRoutes from "./routes/productRoutes.js";
-import ordersRoutes from "./routes/ordersRoutes.js";
-import couponsRoutes from "./routes/couponRoutes.js";
-import materialsRoutes from "./routes/materialsRoutes.js";
+// Static routes (legacy)
+// import usersRoutes from "./routes/usersRoutes.js";
+// import categoriesRoutes from "./routes/categoriesRoutes.js";
+// import productsRoutes from "./routes/productRoutes.js";
+// import ordersRoutes from "./routes/ordersRoutes.js";
+// import couponsRoutes from "./routes/couponRoutes.js";
+// import materialsRoutes from "./routes/materialsRoutes.js";
+
+// Dynamic models + routes
+import loadModels from "./utils/dynamicModel.js";
+import generateCRUDRoutes from "./utils/dynamicRouter.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -18,13 +23,13 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// API routes
-app.use("/api/users", usersRoutes);
-app.use("/api/categories", categoriesRoutes);
-app.use("/api/products", productsRoutes);
-app.use("/api/orders", ordersRoutes);
-app.use("/api/coupons", couponsRoutes);
-app.use("/api/materials", materialsRoutes);
+// API routes (static)
+// app.use("/api/users", usersRoutes);
+// app.use("/api/categories", categoriesRoutes);
+// app.use("/api/products", productsRoutes);
+// app.use("/api/orders", ordersRoutes);
+// app.use("/api/coupons", couponsRoutes);
+// app.use("/api/materials", materialsRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Mongo CRUD API running" });
@@ -32,6 +37,19 @@ app.get("/", (req, res) => {
 
 async function startServer() {
   await connectDB();
+
+  // Dynamic routes from remote config
+  try {
+    const models = await loadModels();
+    Object.entries(models).forEach(([name, Model]) => {
+      const route = `/api/${name}`;
+      console.log(`🔗 Mounting dynamic route: ${route}`);
+      app.use(route, generateCRUDRoutes(Model));
+    });
+  } catch (err) {
+    console.error("❌ Failed to load dynamic models/routes:", err.message);
+  }
+
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
   });
