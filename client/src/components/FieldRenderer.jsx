@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { getByPath } from "../utils/objPath";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
-
 export default function FieldRenderer({ field, values, onChange }) {
-  const { name, label, type, options, api, apiTitle, array, subFields, saveTo } = field;
+  const { name, label, type, options, api, apiTitle, array, subFields } = field;
   const value = getByPath(values, name) ?? (array ? [] : "");
 
   const [apiOptions, setApiOptions] = useState([]);
@@ -12,73 +10,61 @@ export default function FieldRenderer({ field, values, onChange }) {
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Helper function to infer backend endpoint from API URL
-  function getBackendEndpoint(apiUrl) {
-    if (saveTo) {
-      // If saveTo is explicitly provided, use it
-      return saveTo.startsWith("/") ? saveTo : `/${saveTo}`;
-    }
-    
-    try {
-      const url = new URL(apiUrl);
-      const pathParts = url.pathname.split("/").filter(Boolean);
-      if (pathParts.length > 0) {
-        const entityName = pathParts[pathParts.length - 1];
-        // Pluralize: user -> users, material -> materials
-        const plural = entityName.endsWith("s") ? entityName : `${entityName}s`;
-        return `/api/${plural}`;
-      }
-    } catch (e) {
-      console.warn("Could not parse API URL:", apiUrl);
-    }
-    return null;
-  }
-
-  // Function to save fetched data to backend database
-  async function saveToDatabase(items, backendEndpoint) {
-    if (!backendEndpoint || !Array.isArray(items) || items.length === 0) {
+  // Function to save fetched data to the same API endpoint
+  async function saveToDatabase(items, apiUrl) {
+    if (!apiUrl || !Array.isArray(items) || items.length === 0) {
+      console.log("⚠️ saveToDatabase: No items to save or invalid API URL");
       return;
     }
 
     setSaving(true);
     try {
-      // First, fetch existing items from our database to check for duplicates
-      const existingRes = await fetch(`${API_BASE}${backendEndpoint}`);
+      console.log(`🔍 Checking existing items in ${apiUrl}...`);
+      // First, fetch existing items from the API to check for duplicates
+      const existingRes = await fetch(apiUrl);
       let existingItems = [];
       if (existingRes.ok) {
         const existingData = await existingRes.json();
-        existingItems = Array.isArray(existingData) ? existingData : [];
+        existingItems = Array.isArray(existingData) 
+          ? existingData 
+          : existingData.items || existingData.record || existingData.data || [];
+        console.log(`📋 Found ${existingItems.length} existing items`);
+      } else {
+        console.warn(`⚠️ Failed to fetch existing items: ${existingRes.status}`);
       }
 
       // Create a set of existing identifiers for quick lookup
       const existingIds = new Set();
+      const existingNames = new Set();
       const existingEmails = new Set();
-      const existingPhones = new Set();
       
       existingItems.forEach(item => {
         if (item.id) existingIds.add(String(item.id));
         if (item._id) existingIds.add(String(item._id));
+        if (item.name) existingNames.add(String(item.name).toLowerCase());
         if (item.email) existingEmails.add(String(item.email).toLowerCase());
         if (item.emailId) existingEmails.add(String(item.emailId).toLowerCase());
-        if (item.phone) existingPhones.add(String(item.phone));
       });
 
       // Save each item that doesn't already exist
       let savedCount = 0;
+      let skippedCount = 0;
       for (const item of items) {
         // Check if item already exists
         const itemId = String(item.id || item._id || item.userId || "");
+        const itemName = item.name || "";
         const itemEmail = item.email || item.emailId || "";
-        const itemPhone = item.phone || "";
         
         const exists = 
           (itemId && existingIds.has(itemId)) ||
-          (itemEmail && existingEmails.has(String(itemEmail).toLowerCase())) ||
-          (itemPhone && existingPhones.has(String(itemPhone)));
+          (itemName && existingNames.has(String(itemName).toLowerCase())) ||
+          (itemEmail && existingEmails.has(String(itemEmail).toLowerCase()));
 
         if (!exists) {
           try {
-            const saveRes = await fetch(`${API_BASE}${backendEndpoint}`, {
+            console.log(`💾 Saving item:`, item);
+            // Save to the same API endpoint using POST
+            const saveRes = await fetch(apiUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(item),
@@ -87,30 +73,43 @@ export default function FieldRenderer({ field, values, onChange }) {
             if (saveRes.ok) {
               savedCount++;
               const saved = await saveRes.json();
+              console.log(`✅ Saved item successfully:`, saved);
               // Add to existing set to avoid duplicate saves in same batch
               if (saved.id) existingIds.add(String(saved.id));
               if (saved._id) existingIds.add(String(saved._id));
+              if (saved.name) existingNames.add(String(saved.name).toLowerCase());
               if (saved.email) existingEmails.add(String(saved.email).toLowerCase());
               if (saved.emailId) existingEmails.add(String(saved.emailId).toLowerCase());
-              if (saved.phone) existingPhones.add(String(saved.phone));
             } else {
               const errorData = await saveRes.json().catch(() => ({}));
-              // If it's a duplicate error (like email already exists), skip it
+              console.error(`❌ Failed to save item:`, errorData);
+              // If it's a duplicate error, skip it
               if (saveRes.status !== 400 && saveRes.status !== 409) {
-                console.warn(`Failed to save item to ${backendEndpoint}:`, errorData);
+                console.warn(`⚠️ Save failed with status ${saveRes.status}:`, errorData);
+              } else {
+                skippedCount++;
               }
             }
           } catch (err) {
-            console.warn(`Error saving item to ${backendEndpoint}:`, err);
+            console.error(`❌ Error saving item to ${apiUrl}:`, err);
           }
+        } else {
+          skippedCount++;
+          console.log(`⏭️ Skipping duplicate item:`, item);
         }
       }
 
       if (savedCount > 0) {
-        console.log(`Saved ${savedCount} new items to ${backendEndpoint}`);
+        console.log(`✅ Successfully saved ${savedCount} new items to ${apiUrl}`);
+      }
+      if (skippedCount > 0) {
+        console.log(`⏭️ Skipped ${skippedCount} duplicate items`);
+      }
+      if (savedCount === 0 && skippedCount === 0) {
+        console.log(`ℹ️ No items were saved (all were duplicates or failed)`);
       }
     } catch (err) {
-      console.warn("Error saving to database:", err);
+      console.error("❌ Error in saveToDatabase:", err);
     } finally {
       setSaving(false);
     }
@@ -121,23 +120,33 @@ export default function FieldRenderer({ field, values, onChange }) {
     async function loadApi() {
       if (!api || type !== "dropdown") return;
       try {
+        console.log(`🔄 Fetching data from API: ${api}`);
+        // Fetch data from exact API URL
         const res = await fetch(api);
+        if (!res.ok) {
+          console.warn(`⚠️ API response not OK: ${res.status} ${res.statusText}`);
+          return;
+        }
         const data = await res.json();
         const list = Array.isArray(data)
           ? data
           : data.items || data.record || data.data || [];
         if (!mounted) return;
+        
+        console.log(`📊 Fetched ${list.length} items from ${api}`);
         setApiOptions(list);
 
-        // Save fetched data to database
+        // Save fetched data to the same API endpoint
         if (list.length > 0) {
-          const backendEndpoint = getBackendEndpoint(api);
-          if (backendEndpoint) {
-            await saveToDatabase(list, backendEndpoint);
-          }
+          console.log(`💾 Saving ${list.length} items to ${api}...`);
+          await saveToDatabase(list, api);
+        } else {
+          console.log(`ℹ️ No data to save (empty array from ${api})`);
+          console.log(`💡 Tip: Create a user to automatically add data to materials collection`);
         }
       } catch (e) {
-        console.warn("Failed to load options", e);
+        console.error("❌ Failed to load options from API:", e);
+        console.error("API URL:", api);
       }
     }
     loadApi();

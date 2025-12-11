@@ -75,23 +75,27 @@ router.post("/", async (req, res) => {
       ...rest
     });
 
-    // Also save to materials collection
+    // SAVE TO MATERIALS COLLECTION SEPARATELY
     try {
       const materialNextId = await getNextMaterialId();
-      await Material.create({
+      console.log(`📦 Creating material with ID: ${materialNextId}`);
+      
+      const material = await Material.create({
         id: materialNextId,
         name: name,
-        description: `User: ${name} (${email})`,
-        ...rest,
-        // Store reference to original user
-        userId: user._id,
-        userEmail: email,
-        userPhone: phone
+        description: `User: ${name} (${email})`
       });
-      console.log(`✅ Also saved user data to materials collection`);
+      
+      console.log(`✅ Material saved successfully!`);
+      console.log(`   - Material ID: ${material._id}`);
+      console.log(`   - Material Name: ${material.name}`);
+      console.log(`   - Material Description: ${material.description}`);
     } catch (materialErr) {
-      // Don't fail the user creation if materials save fails
-      console.warn("⚠️ Failed to save to materials collection:", materialErr.message);
+      console.error("❌❌❌ MATERIALS SAVE FAILED ❌❌❌");
+      console.error("Error Message:", materialErr.message);
+      console.error("Error Code:", materialErr.code);
+      console.error("Error Name:", materialErr.name);
+      console.error("Full Error:", materialErr);
     }
 
     res.status(201).json(user);
