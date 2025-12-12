@@ -60,15 +60,44 @@ export default function UsersPage() {
     try {
       setStatus("Loading users...");
       const endpoint = `${API_BASE}${config.apiPath || "/users"}`;
+      console.log("Fetching from:", endpoint);
+      
       const res = await fetch(endpoint);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to load users");
+      
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load users");
+      }
 
       console.log("DEBUG: raw users from API:", data);
+      console.log("DEBUG: data type:", typeof data);
+      console.log("DEBUG: is array:", Array.isArray(data));
       console.log("DEBUG: columns config:", config.columns);
 
+      // Handle different response formats from backend
+      let usersArray = [];
+      
+      if (Array.isArray(data)) {
+        // Direct array response
+        usersArray = data;
+      } else if (data && typeof data === 'object') {
+        // Check if data is wrapped in an object (e.g., { users: [...] } or { data: [...] })
+        if (Array.isArray(data.users)) {
+          usersArray = data.users;
+        } else if (Array.isArray(data.data)) {
+          usersArray = data.data;
+        } else if (Array.isArray(data.results)) {
+          usersArray = data.results;
+        } else {
+          console.warn("Data is not an array and not found in common wrapper keys. Using empty array.");
+          usersArray = [];
+        }
+      }
+      
+      console.log("DEBUG: processed usersArray length:", usersArray.length);
+      
       // Normalize: ensure row has 'id' if config.columns expect it
-      const norm = (data || []).map((u) => {
+      const norm = usersArray.map((u) => {
         // shallow copy
         const copy = { ...u };
         if (
@@ -88,9 +117,9 @@ export default function UsersPage() {
       });
 
       setUsers(sorted);
-      setStatus("Users loaded");
+      setStatus(`Users loaded (${sorted.length} users)`);
     } catch (err) {
-      console.error(err);
+      console.error("Error loading users:", err);
       setStatus("Failed to load users: " + err.message);
     }
   }
