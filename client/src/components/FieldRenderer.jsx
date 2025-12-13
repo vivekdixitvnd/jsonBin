@@ -515,9 +515,7 @@ export default function FieldRenderer({ field, values, onChange }) {
       );
     }
 
-    case "subString":
-    case "safetychecks": //pointer like yes noyes n o for safety checks
-    case "permitchecklists":{ // pointer like yes noyes no for permit checklists 
+    case "subString": {
       const arr = Array.isArray(value) ? value : [];
       function updateItem(idx, key, v) {
         const copy = arr.slice();
@@ -535,79 +533,92 @@ export default function FieldRenderer({ field, values, onChange }) {
       }
       return (
         <div>
-          <button 
-            type="button"
-            onClick={addRow}
-            style={{
-              padding: "8px 16px",
-              background: "#28a745",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "14px",
-              cursor: "pointer",
-              marginBottom: "12px",
-              transition: "background 0.2s"
-            }}
-            onMouseOver={(e) => e.target.style.background = "#218838"}
-            onMouseOut={(e) => e.target.style.background = "#28a745"}
-          >
-            + Add Item
-          </button>
+          <button type="button" onClick={addRow} style={{ padding: "8px 16px", background: "#28a745", color: "white", border: "none", borderRadius: "6px", fontSize: "14px", cursor: "pointer", marginBottom: "12px" }} onMouseOver={(e) => e.target.style.background = "#218838"} onMouseOut={(e) => e.target.style.background = "#28a745"}>+ Add Item</button>
           {arr.map((row, i) => (
-            <div
-              key={i}
-              style={{ 
-                border: "1px solid #e0e0e0", 
-                padding: "16px", 
-                marginBottom: "12px",
-                borderRadius: "6px",
-                background: "#fafafa"
-              }}
-            >
+            <div key={i} style={{ border: "1px solid #e0e0e0", padding: "16px", marginBottom: "12px", borderRadius: "6px", background: "#fafafa" }}>
               {subFields?.map((sf) => (
                 <div key={sf.field} style={{ marginBottom: "12px" }}>
-                  <label style={{ 
-                    display: "block", 
-                    marginBottom: "4px",
-                    fontSize: "13px",
-                    fontWeight: "500",
-                    color: "#555"
-                  }}>
-                    {sf.label}
-                  </label>
-                  <input
-                    value={row[sf.field] ?? ""}
-                    onChange={(e) => updateItem(i, sf.field, e.target.value)}
-                    style={{
-                      padding: "8px 12px",
-                      border: "1px solid #ddd",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      width: "100%",
-                      boxSizing: "border-box"
-                    }}
-                  />
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "13px", fontWeight: "500", color: "#555" }}>{sf.label}</label>
+                  <input value={row[sf.field] ?? ""} onChange={(e) => updateItem(i, sf.field, e.target.value)} style={{ padding: "8px 12px", border: "1px solid #ddd", borderRadius: "4px", fontSize: "14px", width: "100%", boxSizing: "border-box" }} />
                 </div>
               ))}
-              <button 
-                type="button"
-                onClick={() => removeRow(i)}
-                style={{
-                  padding: "6px 12px",
-                  background: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "13px",
-                  cursor: "pointer",
-                  transition: "background 0.2s"
-                }}
-                onMouseOver={(e) => e.target.style.background = "#c82333"}
-                onMouseOut={(e) => e.target.style.background = "#dc3545"}
-              >
-                Remove
-              </button>
+              <button type="button" onClick={() => removeRow(i)} style={{ padding: "6px 12px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", fontSize: "13px", cursor: "pointer" }} onMouseOver={(e) => e.target.style.background = "#c82333"} onMouseOut={(e) => e.target.style.background = "#dc3545"}>Remove</button>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "safetychecks": {
+      // Safety checks: render boolean checkboxes for each subField
+      const arr = Array.isArray(value) ? value : [];
+      function updateItem(idx, key, v) {
+        const copy = arr.slice();
+        if (!copy[idx]) copy[idx] = {};
+        copy[idx][key] = v;
+        change(copy);
+      }
+      function addRow() {
+        change([...arr, {}]);
+      }
+      function removeRow(i) {
+        const copy = arr.slice();
+        copy.splice(i, 1);
+        change(copy);
+      }
+      return (
+        <div>
+          <button type="button" onClick={addRow} style={{ padding: "8px 16px", background: "#28a745", color: "white", border: "none", borderRadius: "6px", fontSize: "14px", cursor: "pointer", marginBottom: "12px" }} onMouseOver={(e) => e.target.style.background = "#218838"} onMouseOut={(e) => e.target.style.background = "#28a745"}>+ Add Item</button>
+          {arr.map((row, i) => (
+            <div key={i} style={{ border: "1px solid #e0e0e0", padding: "16px", marginBottom: "12px", borderRadius: "6px", background: "#fafafa" }}>
+              {subFields?.map((sf) => (
+                <div key={sf.field} style={{ marginBottom: "12px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input type="checkbox" checked={Boolean(row[sf.field])} onChange={(e) => updateItem(i, sf.field, e.target.checked)} />
+                    <span style={{ fontSize: "13px", color: "#555" }}>{sf.label}</span>
+                  </label>
+                </div>
+              ))}
+              <button type="button" onClick={() => removeRow(i)} style={{ padding: "6px 12px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", fontSize: "13px", cursor: "pointer" }} onMouseOver={(e) => e.target.style.background = "#c82333"} onMouseOut={(e) => e.target.style.background = "#dc3545"}>Remove</button>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "permitchecklists": {
+      // Permit checklists: render Yes/No select for each subField
+      const arr = Array.isArray(value) ? value : [];
+      function updateItem(idx, key, v) {
+        const copy = arr.slice();
+        if (!copy[idx]) copy[idx] = {};
+        copy[idx][key] = v;
+        change(copy);
+      }
+      function addRow() {
+        change([...arr, {}]);
+      }
+      function removeRow(i) {
+        const copy = arr.slice();
+        copy.splice(i, 1);
+        change(copy);
+      }
+      return (
+        <div>
+          <button type="button" onClick={addRow} style={{ padding: "8px 16px", background: "#28a745", color: "white", border: "none", borderRadius: "6px", fontSize: "14px", cursor: "pointer", marginBottom: "12px" }} onMouseOver={(e) => e.target.style.background = "#218838"} onMouseOut={(e) => e.target.style.background = "#28a745"}>+ Add Item</button>
+          {arr.map((row, i) => (
+            <div key={i} style={{ border: "1px solid #e0e0e0", padding: "16px", marginBottom: "12px", borderRadius: "6px", background: "#fafafa" }}>
+              {subFields?.map((sf) => (
+                <div key={sf.field} style={{ marginBottom: "12px" }}>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "13px", fontWeight: "500", color: "#555" }}>{sf.label}</label>
+                  <select value={row[sf.field] ?? ""} onChange={(e) => updateItem(i, sf.field, e.target.value)} style={{ padding: "8px 12px", border: "1px solid #ddd", borderRadius: "4px", fontSize: "14px", width: "100%", boxSizing: "border-box" }}>
+                    <option value="">— select —</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              ))}
+              <button type="button" onClick={() => removeRow(i)} style={{ padding: "6px 12px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", fontSize: "13px", cursor: "pointer" }} onMouseOver={(e) => e.target.style.background = "#c82333"} onMouseOut={(e) => e.target.style.background = "#dc3545"}>Remove</button>
             </div>
           ))}
         </div>
