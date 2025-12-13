@@ -18,7 +18,7 @@ import loadModels from "./utils/dynamicModel.js";
 import generateCRUDRoutes from "./utils/generateCRUDRoutes.js";
 
 // Upload route
-import uploadRoutes from "./routes/uploadRoutes.js";
+import uploadRoutes from "../../routes/uploadRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
