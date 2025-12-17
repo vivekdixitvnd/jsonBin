@@ -145,8 +145,13 @@ export default function EntityForm({
 
   function handleSubmit(e) {
     if (e && typeof e.preventDefault === "function") e.preventDefault();
+    console.log(`📨 [EntityForm] handleSubmit called. mode=${mode}. Current values:`, onChange ? values : internalValues);
+    if (onChange) {
+      console.log(`📨 [EntityForm] Controlled mode - parent will handle onSubmit. Sending values to parent`);
+    }
     if (onSubmit) {
       // Controlled parent will read its values object
+      console.log(`📨 [EntityForm] Calling onSubmit callback`);
       return onSubmit(e);
     }
     // Uncontrolled fallback: call onSubmit-like behaviour by dispatching a synthetic event

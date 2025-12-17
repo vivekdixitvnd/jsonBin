@@ -134,15 +134,20 @@ export default function UsersPage() {
       }
     });
 
+    console.log(`🚀 [UsersPage] handleSubmit. Mode: ${mode}, Endpoint: ${endpoint}`);
+    console.log(`📦 [UsersPage] cleanedValues to send:`, cleanedValues);
+
     try {
       if (mode === "create") {
         setStatus("Creating user...");
+        console.log(`📤 [UsersPage] POST to ${endpoint}`);
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cleanedValues),
         });
         const created = await res.json();
+        console.log(`📥 [UsersPage] POST response:`, created);
         if (!res.ok) throw new Error(created.message || "Failed to create");
 
         setUsers((prev) =>
@@ -155,12 +160,14 @@ export default function UsersPage() {
         resetForm();
       } else if (mode === "edit" && currentId) {
         setStatus("Updating user...");
+        console.log(`📤 [UsersPage] PUT to ${endpoint}/${currentId}`);
         const res = await fetch(`${endpoint}/${currentId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cleanedValues),
         });
         const updated = await res.json();
+        console.log(`📥 [UsersPage] PUT response:`, updated);
         if (!res.ok) throw new Error(updated.message || "Failed to update");
         setUsers((prev) =>
           prev.map((u) => (u._id === updated._id ? updated : u))
@@ -169,7 +176,7 @@ export default function UsersPage() {
         resetForm();
       }
     } catch (err) {
-      console.error(err);
+      console.error("❌ [UsersPage] Error:", err);
       setStatus(err.message);
     }
   }

@@ -9,12 +9,23 @@ async function loadEntityConfig(entityKey, setStatus) {
     const res = await fetch(CONFIG_URL);
     const raw = await res.json();
 
-    const record = raw.record || raw;
+    // Recursively unwrap wrappers until we locate the entity map
+    function findRoot(obj) {
+      if (!obj || typeof obj !== "object") return null;
+      if (obj[entityKey] || (obj.config && obj.config[entityKey])) return obj;
+      if (obj.record) return findRoot(obj.record);
+      if (obj.data) return findRoot(obj.data);
+      for (const v of Object.values(obj)) {
+        if (typeof v === "object") {
+          const found = findRoot(v);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
 
-    // Support two shapes:
-    // 1) legacy: record.config.<entityKey> -> config used directly
-    // 2) combined: record.<entityKey>.frontend -> frontend config
-    const entityDef = record[entityKey] || record.config?.[entityKey];
+    const root = findRoot(raw) || raw.record || raw.data?.record || raw.data || raw;
+    const entityDef = root[entityKey] || root.config?.[entityKey];
     if (!entityDef) {
       throw new Error(`${entityKey} config not found in JSON`);
     }

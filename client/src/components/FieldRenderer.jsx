@@ -5,11 +5,31 @@ export default function FieldRenderer({ field, values, onChange }) {
   const { name, label, type, options, api, apiTitle, array, subFields } = field;
   const value = getByPath(values, name) ?? (array ? [] : "");
 
+  console.log(`📌 [FieldRenderer] Mounted: name="${name}", type="${type}", hasSubFields=${!!subFields}, subFieldsCount=${subFields?.length || 0}`);
+  if (subFields && subFields.length > 0) {
+    console.log(`   📌 [FieldRenderer] subFields details:`, subFields.map(sf => ({ field: sf.field, label: sf.label, hasApi: !!sf.api, api: sf.api })));
+  }
+
   const [apiOptions, setApiOptions] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [subFieldApiOptions, setSubFieldApiOptions] = useState({});
 
+  // Resolve API path to full URL using VITE_API_URL or window.location.origin
+  function resolveApiUrl(apiPath) {
+    if (!apiPath) return apiPath;
+    try {
+      const viteApi = import.meta.env.VITE_API_URL || "";
+      const serverOrigin = (viteApi || window.location.origin).replace(/\/api\/?$/, "").replace(/\/$/, "");
+      if (/^https?:\/\//i.test(apiPath)) return apiPath;
+      if (apiPath.startsWith("/")) return serverOrigin + apiPath;
+      return serverOrigin + "/" + apiPath;
+    } catch (e) {
+      // fallback: return original
+      return apiPath;
+    }
+  }
   // Function to save fetched data to the same API endpoint
   async function saveToDatabase(items, apiUrl) {
     if (!apiUrl || !Array.isArray(items) || items.length === 0) {
@@ -19,9 +39,10 @@ export default function FieldRenderer({ field, values, onChange }) {
 
     setSaving(true);
     try {
-      console.log(`🔍 Checking existing items in ${apiUrl}...`);
+      const resolvedApi = resolveApiUrl(apiUrl);
+      console.log(`🔍 Checking existing items in ${resolvedApi}...`);
       // First, fetch existing items from the API to check for duplicates
-      const existingRes = await fetch(apiUrl);
+      const existingRes = await fetch(resolvedApi);
       let existingItems = [];
       if (existingRes.ok) {
         const existingData = await existingRes.json();
@@ -64,7 +85,7 @@ export default function FieldRenderer({ field, values, onChange }) {
           try {
             console.log(`💾 Saving item:`, item);
             // Save to the same API endpoint using POST
-            const saveRes = await fetch(apiUrl, {
+            const saveRes = await fetch(resolvedApi, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(item),
@@ -100,7 +121,7 @@ export default function FieldRenderer({ field, values, onChange }) {
       }
 
       if (savedCount > 0) {
-        console.log(`✅ Successfully saved ${savedCount} new items to ${apiUrl}`);
+        console.log(`✅ Successfully saved ${savedCount} new items to ${resolvedApi}`);
       }
       if (skippedCount > 0) {
         console.log(`⏭️ Skipped ${skippedCount} duplicate items`);
@@ -115,14 +136,67 @@ export default function FieldRenderer({ field, values, onChange }) {
     }
   }
 
+  // Load API data for subFields in subString/safetychecks/permitchecklists
+  async function loadSubFieldApi(subFieldConfig, fieldName) {
+    console.log(`🔵 [loadSubFieldApi] Called for field="${fieldName}", hasApi=${!!subFieldConfig?.api}, api="${subFieldConfig?.api}"`);
+    if (!subFieldConfig?.api) {
+      console.debug(`ℹ️ No API for subField "${fieldName}"`);
+      return;
+    }
+    try {
+      const subApiUrl = resolveApiUrl(subFieldConfig.api);
+      console.log(`🔄 [subString] Fetching API for subField "${fieldName}": ${subApiUrl}`);
+      const res = await fetch(subApiUrl);
+      if (!res.ok) {
+        console.warn(`⚠️ [subString] API response not OK: ${res.status}`);
+        // ensure we set an empty array so render knows we've attempted the call
+        setSubFieldApiOptions((prev) => ({ ...prev, [fieldName]: [] }));
+        return;
+      }
+      const data = await res.json();
+      console.log(`🟢 [subString] API response data:`, data);
+      const list = Array.isArray(data) ? data : data.items || data.record || data.data || [];
+      console.log(`📊 [subString] Fetched ${list.length} items for "${fieldName}":`, list);
+        console.log(`🔴 [subString] Setting subFieldApiOptions[${fieldName}] = `, list);
+      setSubFieldApiOptions((prev) => {
+        const updated = { ...prev, [fieldName]: list };
+        console.log(`🔴 [subString] Updated subFieldApiOptions state:`, updated);
+        return updated;
+      });
+      console.log(`✅ [subString] SubField options loaded (NOT saving - only for dropdown display)`);
+    } catch (err) {
+      console.error(`❌ [subString] Failed to load API for "${fieldName}":`, err);
+      // ensure component renders a dropdown (even if empty) so user can add items
+      setSubFieldApiOptions((prev) => ({ ...prev, [fieldName]: [] }));
+    }
+  }
+
+  useEffect(() => {
+    console.log(`🟣 [useEffect subFields] Running: name="${name}", subFields=${subFields?.length || 0}`);
+    console.log(`  Current subFieldApiOptions:`, subFieldApiOptions);
+    if (!subFields || subFields.length === 0) {
+      console.log(`⚪ [useEffect subFields] Skipping - no subFields`);
+      return;
+    }
+    console.debug(`🔍 [subString] Loading subField APIs for "${name}"...`);
+    subFields.forEach((sf) => {
+      console.log(`  📋 subField: field="${sf.field}", api="${sf.api}", apiTitle="${sf.apiTitle}"`);
+      if (sf.api) {
+        console.log(`  🔵 Calling loadSubFieldApi for "${sf.field}"`);
+        loadSubFieldApi(sf, sf.field);
+      }
+    });
+  }, [name, subFields]);
+
   useEffect(() => {
     let mounted = true;
     async function loadApi() {
       if (!api || type !== "dropdown") return;
       try {
-        console.log(`🔄 Fetching data from API: ${api}`);
-        // Fetch data from exact API URL
-        const res = await fetch(api);
+        const apiUrl = resolveApiUrl(api);
+        console.log(`🔄 Fetching data from API: ${apiUrl}`);
+        // Fetch data from resolved API URL
+        const res = await fetch(apiUrl);
         if (!res.ok) {
           console.warn(`⚠️ API response not OK: ${res.status} ${res.statusText}`);
           return;
@@ -133,15 +207,15 @@ export default function FieldRenderer({ field, values, onChange }) {
           : data.items || data.record || data.data || [];
         if (!mounted) return;
         
-        console.log(`📊 Fetched ${list.length} items from ${api}`);
+        console.log(`📊 Fetched ${list.length} items from ${apiUrl}`);
         setApiOptions(list);
 
-        // Save fetched data to the same API endpoint
+        // Save fetched data to the same API endpoint (use resolved URL)
         if (list.length > 0) {
-          console.log(`💾 Saving ${list.length} items to ${api}...`);
-          await saveToDatabase(list, api);
+          console.log(`💾 Saving ${list.length} items to ${apiUrl}...`);
+          await saveToDatabase(list, apiUrl);
         } else {
-          console.log(`ℹ️ No data to save (empty array from ${api})`);
+          console.log(`ℹ️ No data to save (empty array from ${apiUrl})`);
           console.log(`💡 Tip: Create a user to automatically add data to materials collection`);
         }
       } catch (e) {
@@ -543,15 +617,18 @@ export default function FieldRenderer({ field, values, onChange }) {
     case "subString": {
       const arr = Array.isArray(value) ? value : [];
       function updateItem(idx, key, v) {
+        console.log(`📝 [subString] Updated row[${idx}].${key} = ${v}`);
         const copy = arr.slice();
         if (!copy[idx]) copy[idx] = {};
         copy[idx][key] = v;
         change(copy);
       }
       function addRow() {
+        console.log(`➕ [subString] Adding new row to "${name}"`);
         change([...arr, {}]);
       }
       function removeRow(i) {
+        console.log(`❌ [subString] Removing row ${i} from "${name}"`);
         const copy = arr.slice();
         copy.splice(i, 1);
         change(copy);
@@ -561,12 +638,18 @@ export default function FieldRenderer({ field, values, onChange }) {
           <button type="button" onClick={addRow} style={{ padding: "8px 16px", background: "#28a745", color: "white", border: "none", borderRadius: "6px", fontSize: "14px", cursor: "pointer", marginBottom: "12px" }} onMouseOver={(e) => e.target.style.background = "#218838"} onMouseOut={(e) => e.target.style.background = "#28a745"}>+ Add Item</button>
           {arr.map((row, i) => (
             <div key={i} style={{ border: "1px solid #e0e0e0", padding: "16px", marginBottom: "12px", borderRadius: "6px", background: "#fafafa" }}>
-              {subFields?.map((sf) => (
-                <div key={sf.field} style={{ marginBottom: "12px" }}>
-                  <label style={{ display: "block", marginBottom: "4px", fontSize: "13px", fontWeight: "500", color: "#555" }}>{sf.label}</label>
-                  <input value={row[sf.field] ?? ""} onChange={(e) => updateItem(i, sf.field, e.target.value)} style={{ padding: "8px 12px", border: "1px solid #ddd", borderRadius: "4px", fontSize: "14px", width: "100%", boxSizing: "border-box" }} />
-                </div>
-              ))}
+              {subFields?.map((sf) => {
+                // Render subField using the same FieldRenderer so it behaves identical
+                // Build a nested name path: parentName.index.field
+                const nestedName = `${name}.${i}.${sf.field}`;
+                const nestedField = { ...sf, name: nestedName };
+                return (
+                  <div key={nestedName} style={{ marginBottom: "12px" }}>
+                    <label style={{ display: "block", marginBottom: "4px", fontSize: "13px", fontWeight: "500", color: "#555" }}>{sf.label}</label>
+                    <FieldRenderer field={nestedField} values={values} onChange={onChange} />
+                  </div>
+                );
+              })}
               <button type="button" onClick={() => removeRow(i)} style={{ padding: "6px 12px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", fontSize: "13px", cursor: "pointer" }} onMouseOver={(e) => e.target.style.background = "#c82333"} onMouseOut={(e) => e.target.style.background = "#dc3545"}>Remove</button>
             </div>
           ))}

@@ -70,6 +70,54 @@ export default function ProductsPage() {
     if (!config) return;
     const endpoint = `${API_BASE}${config.apiPath || "/products"}`;
 
+    // Save any subString subField items (e.g. materials) to their configured APIs
+    async function saveSubFieldData() {
+      const subStringFields = (config.fields || []).filter(f => f.type === "subString");
+      for (const sfField of subStringFields) {
+        const rows = formValues[sfField.name] || [];
+        for (const subField of (sfField.subFields || [])) {
+          if (!subField.api) continue;
+          const apiEndpoint = `${API_BASE}${subField.api}`;
+          try {
+            const existingRes = await fetch(apiEndpoint);
+            const existingData = existingRes.ok ? await existingRes.json().catch(() => []) : [];
+            const existingList = Array.isArray(existingData) ? existingData : existingData.items || existingData.record || existingData.data || [];
+            const existingNames = new Set(existingList.map(it => String(it[subField.apiTitle || 'name'] || it.name || it.label || it).toLowerCase()));
+
+            const toSave = [];
+            rows.forEach(row => {
+              const val = row[subField.field];
+              if (val == null || val === "") return;
+              if (typeof val === 'object') {
+                const key = String(val[subField.apiTitle || 'name'] || val.name || val.label || JSON.stringify(val)).toLowerCase();
+                if (!existingNames.has(key)) toSave.push(val);
+              } else {
+                const obj = { [(subField.apiTitle || 'name')]: val };
+                const key = String(obj[subField.apiTitle || 'name']).toLowerCase();
+                if (!existingNames.has(key)) toSave.push(obj);
+              }
+            });
+
+            for (const item of toSave) {
+              try {
+                const res = await fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  console.warn('Failed to save subField item', apiEndpoint, item, err);
+                } else {
+                  console.log('Saved subField item to', apiEndpoint, item);
+                }
+              } catch (err) {
+                console.error('Error saving subField item', err);
+              }
+            }
+          } catch (err) {
+            console.error('Error syncing subField api', subField.api, err);
+          }
+        }
+      }
+    }
+
     try {
       if (mode === "create") {
         setStatus("Creating product...");

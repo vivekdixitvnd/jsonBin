@@ -132,7 +132,25 @@ async function loadModels({ autoConnect = true } = {}) {
     }
 
     const res = await axios.get(CONFIG_URL);
-    const config = res.data?.record || res.data;
+    // Recursively unwrap common wrapper shapes until we find the model map
+    function findModels(obj) {
+      if (!obj || typeof obj !== "object") return null;
+      // heuristic: model map likely contains known collection keys like 'users' or 'products'
+      const candidates = ["users", "products", "categories", "orders", "coupons"];
+      if (candidates.some((k) => Object.prototype.hasOwnProperty.call(obj, k))) return obj;
+      if (obj.record) return findModels(obj.record);
+      if (obj.data) return findModels(obj.data);
+      // Sometimes the payload is wrapped in { _id, name, data, ... } where data.record holds models
+      for (const v of Object.values(obj)) {
+        if (typeof v === "object") {
+          const found = findModels(v);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    const config = findModels(res.data) || (res.data?.record || res.data?.data || res.data);
     console.log("🌐 Remote config fetched. Top-level keys:", Object.keys(config || {}));
 
     if (!config || typeof config !== "object") {
